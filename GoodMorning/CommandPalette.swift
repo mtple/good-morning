@@ -77,6 +77,9 @@ struct CommandPalette: View {
         commands.append(Command(title: "Settings…", keywords: "preferences goal words minutes login", shortcut: "⌘,") {
             openSettings()
         })
+        commands.append(Command(title: "Help: How Good Morning Works", keywords: "info about guide lost what why ?", shortcut: "⌘?") {
+            session.toggleHelp()
+        })
         return commands
     }
 

@@ -9,6 +9,7 @@ No accounts and no network. Just a page, a timer and a streak.
 - **Opening the app locks it.** The window fills the screen, the Dock and menu bar disappear, and Cmd-Tab and Cmd-H stop working.
 - **Esc gets you out.** One tap returns you to a normal window and pauses the timer. Shift-Cmd-L (or the "Lock in" link) locks you back in and starts it again.
 - **Cmd-P shows every command:** dark or light mode, lock in, change folder, Settings. The menu bar is hidden while you write, so this is how you reach everything else. The bottom bar shows the hint, and an empty page tells you to just start typing.
+- **Lost?** The ? at the bottom right (or Cmd-?, or Help in the menu bar) opens a short card that explains all of this.
 - **A day counts** if you reach the word goal *or* spend the full time on the page. Time only counts while the page is full screen and Good Morning is the frontmost app.
 - **When you reach the goal,** a chime plays and the lock relaxes. The Dock, menu bar and Cmd-Tab come back, and the page stays full screen until you press Esc. You can keep writing as long as you like.
 - **Your streak** counts consecutive days. Until today counts, the streak shown is the one through yesterday.
@@ -52,7 +53,7 @@ Then press Cmd-R. `project.yml` already sets the deployment target, the sandbox 
 | `Lockdown.swift` | Hiding the Dock and menu bar, disabling Cmd-Tab, filling the screen and restoring the window |
 | `JournalStore.swift` | The folder bookmark, reading and writing daily files, the time log, and the streak calculation |
 | `EditorView.swift` | The plain-text editor (spellcheck and smart punctuation off), its empty-page hint, and its typography |
-| `ContentView.swift` | Layout, the status bar, the progress line, and the first-launch screen |
+| `ContentView.swift` | Layout, the status bar, the progress line, the first-launch screen, and the help card |
 | `CommandPalette.swift` | The Cmd-P palette: every command in one place, searchable |
 | `SettingsView.swift` | Goals, folder, and open at login |
 | `Prefs.swift` | Defaults, dates and the word counter |

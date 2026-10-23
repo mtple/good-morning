@@ -11,7 +11,8 @@ struct ContentView: View {
             if session.folderURL != nil {
                 VStack(spacing: 0) {
                     ProgressLine(progress: session.progress)
-                    EditorView(text: session.text, isFocused: !session.isShowingCommands, onChange: { session.edit($0) })
+                    EditorView(text: session.text, isFocused: !session.isShowingCommands && !session.isShowingHelp,
+                               onChange: { session.edit($0) })
                         .frame(maxWidth: 680)
                         .frame(maxWidth: .infinity)
                     // Under the text, where the eye is, not out in the corners of a full-screen page.
@@ -21,8 +22,18 @@ struct ContentView: View {
                 .ignoresSafeArea(edges: .top)
             } else {
                 Welcome(choose: { session.chooseFolder() })
-                    // Otherwise its Return shortcut beats the palette to the key.
-                    .disabled(session.isShowingCommands)
+                    // Otherwise its Return shortcut beats the palette (or help) to the key.
+                    .disabled(session.isShowingCommands || session.isShowingHelp)
+            }
+
+            if session.isShowingHelp {
+                Color.clear
+                    .contentShape(Rectangle())
+                    .ignoresSafeArea()
+                    .onTapGesture { session.hideHelp() }
+                HelpCard(session: session)
+                    .padding(.top, 80)
+                    .frame(maxHeight: .infinity, alignment: .top)
             }
 
             if session.isShowingCommands {
@@ -50,7 +61,7 @@ private struct StatusBar: View {
         HStack(spacing: 0) {
             left
             Spacer(minLength: 16)
-            Text(streakText)
+            right
         }
         // The word count stays centered, whatever the two sides hold.
         .overlay { center.frame(maxWidth: 240) }
@@ -92,6 +103,17 @@ private struct StatusBar: View {
             Text(error).foregroundStyle(.red).lineLimit(1)
         } else {
             Text("\(session.wordCount.formatted()) / \(session.wordGoal.formatted()) words")
+        }
+    }
+
+    private var right: some View {
+        HStack(spacing: 10) {
+            Text(streakText)
+            Button { session.toggleHelp() } label: {
+                Image(systemName: "questionmark.circle")
+            }
+            .buttonStyle(.plain)
+            .help("How Good Morning works (⌘?)")
         }
     }
 
@@ -145,6 +167,51 @@ private struct Welcome: View {
                 .padding(.top, 6)
         }
         .padding(40)
+    }
+}
+
+// MARK: - Help
+
+/// What's going on, for anyone who feels lost. Opened by the ? in the bottom bar, ⌘?, Help in the menu bar, or ⌘P.
+private struct HelpCard: View {
+    let session: Session
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("How Good Morning works")
+                .font(.system(size: 20, design: .serif))
+            VStack(alignment: .leading, spacing: 8) {
+                point("Write until you reach \(session.wordGoal.formatted()) words or spend \(Prefs.minuteGoal) minutes on the page, whichever comes first.")
+                point("While you write, the page fills the screen and the Dock, menu bar and Cmd-Tab are switched off.")
+                point("Esc steps out and pauses the timer. ⇧⌘L locks you back in. The timer only runs while the page is full screen and Good Morning is in front.")
+                point("Reaching a goal plays a chime, counts the day toward your streak, and gives back the Dock and Cmd-Tab.")
+                point("Your page saves itself every few seconds as a plain markdown file, one per day, in \(folder).")
+                point("⌘P shows every command, like dark mode. ⌘, opens Settings.")
+            }
+            .foregroundStyle(.secondary)
+            HStack {
+                Spacer()
+                Button("Got it") { session.hideHelp() }
+                    .keyboardShortcut(.defaultAction)
+            }
+        }
+        .font(.system(size: 13))
+        .padding(24)
+        .frame(width: 460)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.separator))
+        .shadow(color: .black.opacity(0.2), radius: 24, y: 8)
+    }
+
+    private var folder: String {
+        session.folderURL.map { "your “\($0.lastPathComponent)” folder" } ?? "the folder you choose"
+    }
+
+    private func point(_ text: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text("•")
+            Text(text).fixedSize(horizontal: false, vertical: true)
+        }
     }
 }
 

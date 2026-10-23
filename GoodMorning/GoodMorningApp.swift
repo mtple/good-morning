@@ -17,6 +17,10 @@ struct GoodMorningApp: App {
                 Button("Commands…") { appDelegate.session.toggleCommands() }
                     .keyboardShortcut("p")
             }
+            CommandGroup(replacing: .help) {
+                Button("How Good Morning Works") { appDelegate.session.toggleHelp() }
+                    .keyboardShortcut("?")
+            }
         }
 
         Settings {

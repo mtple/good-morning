@@ -18,6 +18,7 @@ final class Session {
     private(set) var isFullScreen = false  // window covers the screen (locked, or done but not yet left)
     private(set) var isComplete = false    // today counts toward the streak
     private(set) var isShowingCommands = false  // the Cmd-P palette is up
+    private(set) var isShowingHelp = false      // the "How Good Morning works" card is up
     private(set) var streak = 0
     private(set) var folderURL: URL?
     private(set) var errorMessage: String?
@@ -251,14 +252,31 @@ final class Session {
     /// Cmd-P. The menu bar is hidden while you write, so the palette is the way to everything else.
     func toggleCommands() {
         isShowingCommands.toggle()
-        if isShowingCommands { window?.makeKeyAndOrderFront(nil) }
+        if isShowingCommands {
+            isShowingHelp = false
+            window?.makeKeyAndOrderFront(nil)
+        }
     }
 
     func hideCommands() {
         isShowingCommands = false
     }
 
-    /// One tap of Esc closes the command palette if it's up, or else leaves the full-screen page,
+    /// ⌘?, the ? in the bottom bar, or Help in the palette. While it's up, typing doesn't go into the page.
+    func toggleHelp() {
+        isShowingHelp.toggle()
+        if isShowingHelp {
+            isShowingCommands = false
+            window?.makeKeyAndOrderFront(nil)
+            window?.makeFirstResponder(nil)
+        }
+    }
+
+    func hideHelp() {
+        isShowingHelp = false
+    }
+
+    /// One tap of Esc closes the command palette or help if either is up, or else leaves the full-screen page,
     /// locked or not. Elsewhere Esc is swallowed, so the text view doesn't pop up its word-completion list.
     private func installEscapeKey() {
         guard keyMonitor == nil else { return }
@@ -278,6 +296,8 @@ final class Session {
         if let textView = window.firstResponder as? NSTextView, textView.hasMarkedText() { return false }
         if isShowingCommands {
             hideCommands()
+        } else if isShowingHelp {
+            hideHelp()
         } else if isFullScreen {
             leaveLockdown()
         }
