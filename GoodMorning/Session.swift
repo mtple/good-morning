@@ -4,9 +4,9 @@ import Observation
 /// Today's writing session: the page, the timer, the goal, the lock and the streak.
 ///
 /// Rules:
-/// - Opening the app locks it until you write `wordGoal` words or keep it open for `minuteGoal` minutes.
-/// - Either one counts the day toward the streak. Time only accrues while the app is frontmost.
-/// - One tap of Esc leaves the lock. The timer keeps running, so the day can still count.
+/// - Opening the app locks it until you write `wordGoal` words or spend `minuteGoal` minutes on the page.
+/// - Either one counts the day toward the streak. Time only accrues on the full-screen page while the app is frontmost.
+/// - One tap of Esc leaves the lock and pauses the timer. Locking in again resumes it.
 /// - Once the goal is met the lock relaxes on its own. You can keep writing as long as you like.
 @MainActor
 @Observable
@@ -149,8 +149,8 @@ final class Session {
 
     private func tick() {
         guard hasOpened else { return }
-        // "Open" means frontmost. Time in another app doesn't count.
-        if NSApp.isActive, window?.isVisible == true {
+        // Time counts only on the full-screen page with the app frontmost. Esc pauses it.
+        if isFullScreen, NSApp.isActive, window?.isVisible == true {
             elapsed += 1
             checkGoal()
         }

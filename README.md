@@ -7,8 +7,8 @@ No accounts and no network. Just a page, a timer and a streak.
 ## How it behaves
 
 - **Opening the app locks it.** The window fills the screen, the Dock and menu bar disappear, and Cmd-Tab and Cmd-H stop working.
-- **Esc gets you out.** One tap returns you to a normal window. The timer keeps running, so the day can still count. If you leave by accident, Shift-Cmd-L (or the "Lock in" link) locks you back in.
-- **A day counts** if you reach the word goal *or* keep the app open for the full time. Time only counts while Good Morning is the frontmost app.
+- **Esc gets you out.** One tap returns you to a normal window and pauses the timer. Shift-Cmd-L (or the "Lock in" link) locks you back in and starts it again.
+- **A day counts** if you reach the word goal *or* spend the full time on the page. Time only counts while the page is full screen and Good Morning is the frontmost app.
 - **When you reach the goal,** a chime plays and the lock relaxes. The Dock, menu bar and Cmd-Tab come back, and the page stays full screen until you press Esc. You can keep writing as long as you like.
 - **Your streak** counts consecutive days. Until today counts, the streak shown is the one through yesterday.
 - **Pages** are saved as `2026-10-23.md` in the folder you pick on first launch. Autosave runs every 5 seconds, whenever you switch away, and on quit. A day with no writing gets no file.

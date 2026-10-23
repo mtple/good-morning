@@ -3,7 +3,7 @@ import Foundation
 /// Reads and writes the daily pages: one plain markdown file per day in a folder the user picks.
 ///
 /// Alongside the pages sits a small hidden log, `.good-morning.json`, that remembers how long
-/// the app was open each day. Words come from the files themselves; time can't, so it goes here.
+/// you spent on the page each day. Words come from the files themselves; time can't, so it goes here.
 /// Obsidian ignores dotfiles, so the log never shows up in the vault.
 @MainActor
 final class JournalStore {
@@ -103,7 +103,7 @@ final class JournalStore {
 
     // MARK: Streak
 
-    /// A day counts if you hit the word goal or kept the app open for the full time.
+    /// A day counts if you hit the word goal or spent the full time on the page.
     func counts(_ day: Day, wordGoal: Int) -> Bool {
         if log[day.key]?.completed == true { return true }
         return countWords(read(day)) >= wordGoal
