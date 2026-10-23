@@ -14,7 +14,9 @@ struct ContentView: View {
                     EditorView(text: session.text, isFocused: !session.isShowingCommands, onChange: { session.edit($0) })
                         .frame(maxWidth: 680)
                         .frame(maxWidth: .infinity)
+                    // Under the text, where the eye is, not out in the corners of a full-screen page.
                     StatusBar(session: session)
+                        .frame(maxWidth: 680)
                 }
                 .ignoresSafeArea(edges: .top)
             } else {
@@ -46,13 +48,16 @@ private struct StatusBar: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            left.frame(maxWidth: .infinity, alignment: .leading)
-            center.frame(maxWidth: .infinity, alignment: .center)
-            Text(streakText).frame(maxWidth: .infinity, alignment: .trailing)
+            left
+            Spacer(minLength: 16)
+            Text(streakText)
         }
+        // The word count stays centered, whatever the two sides hold.
+        .overlay { center.frame(maxWidth: 240) }
+        .lineLimit(1)
         .font(.system(size: 12).monospacedDigit())
         .foregroundStyle(.secondary)
-        .padding(.horizontal, 24)
+        .padding(.horizontal, 37)  // lines up with the text: the editor's 32 pt inset plus 5 pt line padding
         .padding(.vertical, 14)
     }
 
