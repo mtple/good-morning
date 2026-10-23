@@ -11,7 +11,7 @@ struct ContentView: View {
             if session.folderURL != nil {
                 VStack(spacing: 0) {
                     ProgressLine(progress: session.progress)
-                    EditorView(text: session.text, onChange: { session.edit($0) })
+                    EditorView(text: session.text, isFocused: !session.isShowingCommands, onChange: { session.edit($0) })
                         .frame(maxWidth: 680)
                         .frame(maxWidth: .infinity)
                     StatusBar(session: session)
@@ -19,6 +19,19 @@ struct ContentView: View {
                 .ignoresSafeArea(edges: .top)
             } else {
                 Welcome(choose: { session.chooseFolder() })
+                    // Otherwise its Return shortcut beats the palette to the key.
+                    .disabled(session.isShowingCommands)
+            }
+
+            if session.isShowingCommands {
+                // A click anywhere else closes the palette.
+                Color.clear
+                    .contentShape(Rectangle())
+                    .ignoresSafeArea()
+                    .onTapGesture { session.hideCommands() }
+                CommandPalette(session: session)
+                    .padding(.top, 80)
+                    .frame(maxHeight: .infinity, alignment: .top)
             }
         }
         .frame(minWidth: 520, minHeight: 420)
@@ -58,6 +71,9 @@ private struct StatusBar: View {
             if session.isFullScreen {
                 Text("esc to leave").foregroundStyle(.tertiary)
             }
+            Button("⌘P commands") { session.toggleCommands() }
+                .buttonStyle(.plain)
+                .foregroundStyle(.tertiary)
         }
     }
 
@@ -105,10 +121,12 @@ private struct Welcome: View {
         VStack(spacing: 18) {
             Text("Good Morning")
                 .font(.system(size: 34, design: .serif))
-            Text("Write until you reach \(Prefs.wordGoal.formatted()) words or \(Prefs.minuteGoal) minutes pass. While you write, the rest of the Mac stays out of the way. Esc gets you out.")
+            Text("Write until you reach \(Prefs.wordGoal.formatted()) words or \(Prefs.minuteGoal) minutes pass. Once you choose a folder, the page fills the screen and the Dock, menu bar and Cmd-Tab go away until you're done.")
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: 400)
+            Text("Esc steps out and pauses the timer. ⌘P shows everything else.")
+                .foregroundStyle(.secondary)
             Text("Pages are saved as plain markdown, one file per day.")
                 .foregroundStyle(.secondary)
             Button("Choose a Folder…", action: choose)

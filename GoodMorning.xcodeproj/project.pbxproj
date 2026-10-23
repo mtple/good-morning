@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		0940C9D559993EF367D8DE78 /* JournalStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59A8CA2112FAF79EF4DC72A1 /* JournalStore.swift */; };
+		1B8E70F16BA8DDEEAD912DA3 /* CommandPalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0926CF0ABF961AD4F5856F3D /* CommandPalette.swift */; };
 		332CAA2C560C46ED6E6665A6 /* Prefs.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1689D44561B1B2C823697CC /* Prefs.swift */; };
 		5D6F5DD15131E6895EE798C1 /* Lockdown.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D946614C2FDC0C7E289CA55 /* Lockdown.swift */; };
 		7B03AE410EA674F67CDD0851 /* GoodMorningApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90A0E6418433087F051833ED /* GoodMorningApp.swift */; };
@@ -19,6 +20,7 @@
 
 /* Begin PBXFileReference section */
 		02C2AF3240F0955DCDAC18A3 /* Session.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Session.swift; sourceTree = "<group>"; };
+		0926CF0ABF961AD4F5856F3D /* CommandPalette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandPalette.swift; sourceTree = "<group>"; };
 		5041CDCF2254FCA490E53B26 /* GoodMorning.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = GoodMorning.entitlements; sourceTree = "<group>"; };
 		59A8CA2112FAF79EF4DC72A1 /* JournalStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JournalStore.swift; sourceTree = "<group>"; };
 		7D946614C2FDC0C7E289CA55 /* Lockdown.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Lockdown.swift; sourceTree = "<group>"; };
@@ -42,6 +44,7 @@
 		3357E29D43BBD74609C7138D /* GoodMorning */ = {
 			isa = PBXGroup;
 			children = (
+				0926CF0ABF961AD4F5856F3D /* CommandPalette.swift */,
 				D6A429828EEEDDE2B2104104 /* ContentView.swift */,
 				EA9476BE65380E5C497A664D /* EditorView.swift */,
 				5041CDCF2254FCA490E53B26 /* GoodMorning.entitlements */,
@@ -121,6 +124,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				1B8E70F16BA8DDEEAD912DA3 /* CommandPalette.swift in Sources */,
 				A3B1B0F4565D019D4D0CD1AB /* ContentView.swift in Sources */,
 				86E68824434B07498A4AB956 /* EditorView.swift in Sources */,
 				7B03AE410EA674F67CDD0851 /* GoodMorningApp.swift in Sources */,

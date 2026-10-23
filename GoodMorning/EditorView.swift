@@ -5,18 +5,20 @@ import SwiftUI
 /// Morning pages aren't for editing yourself.
 struct EditorView: NSViewRepresentable {
     var text: String
+    var isFocused = true  // false while the command palette is up
     var onChange: @MainActor (String) -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator(onChange: onChange) }
 
     func makeNSView(context: Context) -> NSScrollView {
-        let scrollView = NSTextView.scrollableTextView()
+        let scrollView = PageTextView.scrollableTextView()
         scrollView.drawsBackground = false
         scrollView.hasVerticalScroller = true
         scrollView.autohidesScrollers = true
         scrollView.scrollerStyle = .overlay
 
-        guard let textView = scrollView.documentView as? NSTextView else { return scrollView }
+        guard let textView = scrollView.documentView as? PageTextView else { return scrollView }
+        textView.placeholder = "Just start typing. Whatever's on your mind counts."
         textView.delegate = context.coordinator
         textView.drawsBackground = false
         textView.isRichText = false
@@ -52,6 +54,11 @@ struct EditorView: NSViewRepresentable {
         if textView.string != text {
             load(text, into: textView)
         }
+        // Take the caret back when the command palette closes.
+        if isFocused, !context.coordinator.wasFocused {
+            textView.window?.makeFirstResponder(textView)
+        }
+        context.coordinator.wasFocused = isFocused
     }
 
     /// Put the text in and the caret at the end, ready to keep going.
@@ -67,6 +74,7 @@ struct EditorView: NSViewRepresentable {
     @MainActor
     final class Coordinator: NSObject, NSTextViewDelegate {
         var onChange: @MainActor (String) -> Void
+        var wasFocused = true
 
         init(onChange: @escaping @MainActor (String) -> Void) {
             self.onChange = onChange
@@ -76,6 +84,29 @@ struct EditorView: NSViewRepresentable {
             guard let textView = notification.object as? NSTextView else { return }
             onChange(textView.string)
         }
+    }
+}
+
+/// The page itself. An empty page shows a hint, set in the page's own type, where the first words will go.
+final class PageTextView: NSTextView {
+    var placeholder = ""
+    private var showsPlaceholder = false
+
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+        showsPlaceholder = string.isEmpty && !placeholder.isEmpty
+        guard showsPlaceholder else { return }
+        var attributes = Typography.attributes
+        attributes[.foregroundColor] = NSColor.tertiaryLabelColor
+        let x = textContainerOrigin.x + (textContainer?.lineFragmentPadding ?? 0)
+        let rect = NSRect(x: x, y: textContainerOrigin.y, width: bounds.width - 2 * x, height: bounds.height)
+        NSAttributedString(string: placeholder, attributes: attributes).draw(in: rect)
+    }
+
+    override func didChangeText() {
+        super.didChangeText()
+        // Typing only redraws around the new letters, so clear (or bring back) the whole hint.
+        if showsPlaceholder != string.isEmpty { needsDisplay = true }
     }
 }
 

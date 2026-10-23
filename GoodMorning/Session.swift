@@ -17,6 +17,7 @@ final class Session {
     private(set) var isLocked = false      // Dock, menu bar and Cmd-Tab are off
     private(set) var isFullScreen = false  // window covers the screen (locked, or done but not yet left)
     private(set) var isComplete = false    // today counts toward the streak
+    private(set) var isShowingCommands = false  // the Cmd-P palette is up
     private(set) var streak = 0
     private(set) var folderURL: URL?
     private(set) var errorMessage: String?
@@ -195,7 +196,7 @@ final class Session {
         }
     }
 
-    private func leaveLockdown() {
+    func leaveLockdown() {
         guard let window else { return }
         lockdown.release(window)
         isLocked = false
@@ -203,8 +204,20 @@ final class Session {
         window.makeKeyAndOrderFront(nil)
     }
 
-    /// One tap of Esc leaves the full-screen page, locked or not. Elsewhere Esc is swallowed,
-    /// so the text view doesn't pop up its word-completion list.
+    // MARK: Commands
+
+    /// Cmd-P. The menu bar is hidden while you write, so the palette is the way to everything else.
+    func toggleCommands() {
+        isShowingCommands.toggle()
+        if isShowingCommands { window?.makeKeyAndOrderFront(nil) }
+    }
+
+    func hideCommands() {
+        isShowingCommands = false
+    }
+
+    /// One tap of Esc closes the command palette if it's up, or else leaves the full-screen page,
+    /// locked or not. Elsewhere Esc is swallowed, so the text view doesn't pop up its word-completion list.
     private func installEscapeKey() {
         guard keyMonitor == nil else { return }
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
@@ -221,7 +234,11 @@ final class Session {
         guard let window, window.windowNumber == windowNumber else { return false }
         // Let input methods (e.g. Japanese) use Esc to cancel what's being composed.
         if let textView = window.firstResponder as? NSTextView, textView.hasMarkedText() { return false }
-        if isFullScreen { leaveLockdown() }
+        if isShowingCommands {
+            hideCommands()
+        } else if isFullScreen {
+            leaveLockdown()
+        }
         return true
     }
 }

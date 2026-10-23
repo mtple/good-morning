@@ -14,6 +14,8 @@ struct GoodMorningApp: App {
             CommandGroup(replacing: .newItem) {
                 Button("Lock In") { appDelegate.session.lockIn() }
                     .keyboardShortcut("l", modifiers: [.command, .shift])
+                Button("Commands…") { appDelegate.session.toggleCommands() }
+                    .keyboardShortcut("p")
             }
         }
 
