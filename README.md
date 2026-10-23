@@ -1,6 +1,6 @@
 # Good Morning
 
-A small Mac app for morning pages. You open it and it locks the Mac until you write 1,000 words or 30 minutes pass, whichever comes first. Your pages are saved as plain markdown, one file per day, in a folder you choose, so they can live inside your Obsidian vault.
+A small Mac app for morning pages. You open it and it locks the Mac until you write 750 words or 30 minutes pass, whichever comes first. Your pages are saved as plain markdown, one file per day, in a folder you choose, so they can live inside your Obsidian vault.
 
 No accounts and no network. Just a page, a timer and a streak.
 

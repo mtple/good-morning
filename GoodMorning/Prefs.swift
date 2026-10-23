@@ -5,7 +5,7 @@ enum Prefs {
     static let wordGoalKey = "wordGoal"
     static let minuteGoalKey = "minuteGoal"
 
-    static let defaultWordGoal = 1000
+    static let defaultWordGoal = 750
     static let defaultMinuteGoal = 30
 
     static var wordGoal: Int { positive(wordGoalKey, or: defaultWordGoal) }
