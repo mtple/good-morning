@@ -35,7 +35,7 @@ struct EditorView: NSViewRepresentable {
         textView.textContainerInset = NSSize(width: 32, height: 64)
         textView.font = Typography.font
         textView.textColor = .textColor
-        textView.insertionPointColor = .controlAccentColor
+        textView.insertionPointColor = .textColor
         textView.defaultParagraphStyle = Typography.paragraph
         textView.typingAttributes = Typography.attributes
 
