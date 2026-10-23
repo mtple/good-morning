@@ -32,7 +32,7 @@ final class Lockdown {
         window.isMovable = false
         setTrafficLightsHidden(true, in: window)
         if let screen = window.screen ?? NSScreen.main {
-            window.setFrame(screen.frame, display: true)
+            window.setFrame(lockedFrame(on: screen), display: true)
         }
         window.makeKeyAndOrderFront(nil)
         isFullScreen = true
@@ -53,6 +53,14 @@ final class Lockdown {
         setTrafficLightsHidden(false, in: window)
         window.setFrame(restoredFrame(for: window), display: true, animate: true)
         isFullScreen = false
+    }
+
+    /// The whole screen, less the strip beside the camera notch on MacBooks that have one. AppKit won't
+    /// let a window up into that strip: it pushes the window down instead, and the bottom bar falls off the screen.
+    private func lockedFrame(on screen: NSScreen) -> NSRect {
+        var frame = screen.frame
+        frame.size.height -= screen.safeAreaInsets.top
+        return frame
     }
 
     private func setTrafficLightsHidden(_ hidden: Bool, in window: NSWindow) {
