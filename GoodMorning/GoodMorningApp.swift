@@ -1,0 +1,45 @@
+import SwiftUI
+
+@main
+struct GoodMorningApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+
+    var body: some Scene {
+        Window("Good Morning", id: "pages") {
+            ContentView(session: appDelegate.session)
+        }
+        .windowStyle(.hiddenTitleBar)
+        .defaultSize(width: 820, height: 900)
+        .commands {
+            CommandGroup(replacing: .newItem) {
+                Button("Lock In") { appDelegate.session.lockIn() }
+                    .keyboardShortcut("l", modifiers: [.command, .shift])
+            }
+        }
+
+        Settings {
+            SettingsView(session: appDelegate.session)
+        }
+    }
+}
+
+@MainActor
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    let session = Session()
+
+    // One window, one job: closing it quits the app (and saves).
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+
+    // If the app sat open overnight, coming back to it starts a new day's page.
+    func applicationDidBecomeActive(_ notification: Notification) {
+        session.appDidBecomeActive()
+    }
+
+    func applicationWillResignActive(_ notification: Notification) {
+        session.save()
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        session.save()
+    }
+}

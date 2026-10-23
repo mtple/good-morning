@@ -1,0 +1,29 @@
+# XcodeGen spec. Run `xcodegen` in this folder to create GoodMorning.xcodeproj.
+name: GoodMorning
+options:
+  bundleIdPrefix: com.mtple
+  deploymentTarget:
+    macOS: "14.0"
+settings:
+  base:
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    SWIFT_VERSION: "5.0"
+targets:
+  GoodMorning:
+    type: application
+    platform: macOS
+    sources:
+      - path: GoodMorning
+    entitlements:
+      path: GoodMorning/GoodMorning.entitlements
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.mtple.GoodMorning
+        INFOPLIST_KEY_CFBundleDisplayName: Good Morning
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
+        ENABLE_HARDENED_RUNTIME: YES
+        CODE_SIGN_STYLE: Automatic
+        # "Sign to Run Locally". Set DEVELOPMENT_TEAM to distribute.
+        CODE_SIGN_IDENTITY: "-"
