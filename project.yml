@@ -17,6 +17,11 @@ targets:
       - path: GoodMorning
     entitlements:
       path: GoodMorning/GoodMorning.entitlements
+      # XcodeGen writes this file from these properties, so keep the two in sync.
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.files.user-selected.read-write: true
+        com.apple.security.files.bookmarks.app-scope: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.mtple.GoodMorning
