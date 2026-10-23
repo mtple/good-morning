@@ -13,7 +13,7 @@ import Observation
 final class Session {
     private(set) var text = ""
     private(set) var wordCount = 0
-    private(set) var elapsed = 0           // seconds, today
+    private(set) var elapsed = 0           // seconds today, up to the last check (see elapsedNow)
     private(set) var isLocked = false      // Dock, menu bar and Cmd-Tab are off
     private(set) var isFullScreen = false  // window covers the screen (locked, or done but not yet left)
     private(set) var isComplete = false    // today counts toward the streak
@@ -24,7 +24,13 @@ final class Session {
 
     var wordGoal: Int { Prefs.wordGoal }
     var secondsGoal: Int { Prefs.minuteGoal * 60 }
-    var secondsLeft: Int { max(0, secondsGoal - elapsed) }
+    var secondsLeft: Int { max(0, secondsGoal - elapsedNow) }
+    var isTimerRunning: Bool { runningSince != nil }
+
+    /// Today's seconds on the page, including the stretch running right now.
+    var elapsedNow: Int {
+        elapsed + Int(runningSince.map { Date().timeIntervalSince($0) } ?? 0)
+    }
 
     /// The further along of the two goals, 0...1.
     var progress: Double {
@@ -39,7 +45,7 @@ final class Session {
     @ObservationIgnored private weak var window: NSWindow?
     @ObservationIgnored private var day = Day.today
     @ObservationIgnored private var textDirty = false
-    @ObservationIgnored private var secondsSinceSave = 0
+    private var runningSince: Date?        // the timer is running: page full screen, app frontmost
     @ObservationIgnored private var ticker: Task<Void, Never>?
     @ObservationIgnored private var keyMonitor: Any?
     @ObservationIgnored private var hasOpened = false
@@ -64,9 +70,16 @@ final class Session {
     }
 
     func appDidBecomeActive() {
+        updateClock()
         guard hasOpened, folderURL != nil, Day.today != day else { return }
         save()
         openToday()
+    }
+
+    /// Switching to another app stops the timer and saves.
+    func appWillResignActive() {
+        updateClock(isActive: false)
+        save()
     }
 
     func chooseFolder() {
@@ -97,6 +110,7 @@ final class Session {
         wordCount = countWords(text)
         textDirty = false
         let record = store.record(for: day)
+        runningSince = nil
         elapsed = record.seconds
         isComplete = record.completed || wordCount >= wordGoal || elapsed >= secondsGoal
         if isComplete && !record.completed { markComplete() }
@@ -122,7 +136,7 @@ final class Session {
     /// Autosave runs every few seconds, on switching away, and on quit.
     func save() {
         guard folderURL != nil, hasOpened else { return }
-        secondsSinceSave = 0
+        bankTime()
         var record = store.record(for: day)
         record.seconds = elapsed
         store.setRecord(record, for: day)
@@ -138,25 +152,51 @@ final class Session {
         }
     }
 
+    /// Every 5 seconds: bank the time, check the goal, autosave. When the time goal falls
+    /// sooner than that, the wait is cut short so the chime lands on it.
     private func startTicker() {
         guard ticker == nil else { return }
         ticker = Task { [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(1))
+                try? await Task.sleep(for: self?.timeToNextCheck ?? .seconds(5))
                 self?.tick()
             }
         }
     }
 
+    private var timeToNextCheck: Duration {
+        guard let since = runningSince, !isComplete else { return .seconds(5) }
+        let left = Double(secondsGoal - elapsed) - Date().timeIntervalSince(since)
+        return .seconds(min(5, max(0.1, left)))
+    }
+
     private func tick() {
         guard hasOpened else { return }
-        // Time counts only on the full-screen page with the app frontmost. Esc pauses it.
-        if isFullScreen, NSApp.isActive, window?.isVisible == true {
-            elapsed += 1
-            checkGoal()
+        bankTime()
+        checkGoal()
+        save()
+    }
+
+    // MARK: Timer
+
+    /// Moves the running stretch into `elapsed`, keeping the part-second still running.
+    /// Time is measured by the clock, not by counting checks, so it stays exact however rarely they run.
+    private func bankTime() {
+        guard let since = runningSince else { return }
+        let seconds = Int(Date().timeIntervalSince(since))
+        guard seconds > 0 else { return }
+        elapsed += seconds
+        runningSince = since + TimeInterval(seconds)
+    }
+
+    /// The timer runs only while the page is full screen and the app is frontmost. Esc pauses it.
+    private func updateClock(isActive: Bool? = nil) {
+        bankTime()
+        if isFullScreen, isActive ?? NSApp.isActive {
+            if runningSince == nil { runningSince = Date() }
+        } else {
+            runningSince = nil
         }
-        secondsSinceSave += 1
-        if secondsSinceSave >= 5 { save() }
     }
 
     // MARK: Goal and streak
@@ -193,6 +233,7 @@ final class Session {
             self.lockdown.engage(window)
             self.isLocked = true
             self.isFullScreen = true
+            self.updateClock()
         }
     }
 
@@ -201,6 +242,7 @@ final class Session {
         lockdown.release(window)
         isLocked = false
         isFullScreen = false
+        updateClock()
         window.makeKeyAndOrderFront(nil)
     }
 

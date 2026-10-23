@@ -61,7 +61,12 @@ private struct StatusBar: View {
             if session.isComplete {
                 Text("Done for today")
             } else {
-                Text(clock(session.secondsLeft))
+                if session.isTimerRunning {
+                    // Checks run every 5 seconds; the clock on screen still ticks each second.
+                    TimelineView(.periodic(from: .now, by: 1)) { _ in Text(clock(session.secondsLeft)) }
+                } else {
+                    Text(clock(session.secondsLeft))
+                }
                 if !session.isFullScreen {
                     Button("Lock in") { session.lockIn() }
                         .buttonStyle(.link)

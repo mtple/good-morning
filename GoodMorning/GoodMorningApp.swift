@@ -37,13 +37,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // One window, one job: closing it quits the app (and saves).
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
 
-    // If the app sat open overnight, coming back to it starts a new day's page.
+    // Restarts the timer. If the app sat open overnight, coming back to it starts a new day's page.
     func applicationDidBecomeActive(_ notification: Notification) {
         session.appDidBecomeActive()
     }
 
     func applicationWillResignActive(_ notification: Notification) {
-        session.save()
+        session.appWillResignActive()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
