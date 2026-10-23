@@ -6,6 +6,7 @@ struct SettingsView: View {
 
     @AppStorage(Prefs.wordGoalKey) private var wordGoal = Prefs.defaultWordGoal
     @AppStorage(Prefs.minuteGoalKey) private var minuteGoal = Prefs.defaultMinuteGoal
+    @AppStorage(Prefs.appearanceKey) private var appearance = Appearance.system
     @State private var openAtLogin = SMAppService.mainApp.status == .enabled
 
     var body: some View {
@@ -32,6 +33,11 @@ struct SettingsView: View {
             }
 
             Section {
+                Picker("Appearance", selection: $appearance) {
+                    ForEach(Appearance.allCases, id: \.self) { Text($0.title) }
+                }
+                .onChange(of: appearance) { _, appearance in appearance.apply() }
+
                 Toggle("Open Good Morning at login", isOn: $openAtLogin)
                     .onChange(of: openAtLogin) { _, enabled in
                         do {

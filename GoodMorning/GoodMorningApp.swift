@@ -27,6 +27,11 @@ struct GoodMorningApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let session = Session()
 
+    // Before the window appears, so it doesn't open in the wrong colors.
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        Prefs.appearance.apply()
+    }
+
     // One window, one job: closing it quits the app (and saves).
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
 

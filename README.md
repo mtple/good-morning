@@ -14,7 +14,7 @@ No accounts and no network. Just a page, a timer and a streak.
 - **Pages** are saved as `2026-10-23.md` in the folder you pick on first launch. Autosave runs every 5 seconds, whenever you switch away, and on quit. A day with no writing gets no file.
 - **Time is logged** in a hidden `.good-morning.json` in the same folder. Word counts come from the files themselves, but time can't, so it's stored there. Obsidian ignores dotfiles. If you delete the log, you lose only the days that counted by time; days that reached the word goal still count.
 - **If the app stays open overnight,** switching back to it the next morning starts a new page and locks again.
-- **Settings** (Cmd-,) holds the goals, the folder, and "Open at login", which makes it the first thing on screen in the morning.
+- **Settings** (Cmd-,) holds the goals, the folder, the appearance (light, dark, or matching the Mac), and "Open at login", which makes it the first thing on screen in the morning.
 
 The lock is meant to be easy to get out of. Force Quit, Mission Control and Spotlight still work. The lock only applies while this app is frontmost, and AppKit lifts it as soon as the app quits or crashes.
 

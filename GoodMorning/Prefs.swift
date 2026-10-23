@@ -1,9 +1,10 @@
-import Foundation
+import AppKit
 
 /// Goals live in UserDefaults so the Settings window can edit them with @AppStorage.
 enum Prefs {
     static let wordGoalKey = "wordGoal"
     static let minuteGoalKey = "minuteGoal"
+    static let appearanceKey = "appearance"
 
     static let defaultWordGoal = 750
     static let defaultMinuteGoal = 30
@@ -11,9 +12,35 @@ enum Prefs {
     static var wordGoal: Int { positive(wordGoalKey, or: defaultWordGoal) }
     static var minuteGoal: Int { positive(minuteGoalKey, or: defaultMinuteGoal) }
 
+    static var appearance: Appearance {
+        UserDefaults.standard.string(forKey: appearanceKey).flatMap(Appearance.init) ?? .system
+    }
+
     private static func positive(_ key: String, or fallback: Int) -> Int {
         let value = UserDefaults.standard.integer(forKey: key)
         return value > 0 ? value : fallback
+    }
+}
+
+/// Light or dark page, or follow the Mac.
+enum Appearance: String, CaseIterable {
+    case system, light, dark
+
+    var title: String {
+        switch self {
+        case .system: "Match System"
+        case .light: "Light"
+        case .dark: "Dark"
+        }
+    }
+
+    /// Set app-wide, so Settings and the folder picker match the page.
+    @MainActor func apply() {
+        NSApp.appearance = switch self {
+        case .system: nil
+        case .light: NSAppearance(named: .aqua)
+        case .dark: NSAppearance(named: .darkAqua)
+        }
     }
 }
 
