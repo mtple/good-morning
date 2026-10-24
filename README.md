@@ -14,6 +14,7 @@ No accounts and no network. Just a page, a timer and a streak.
 - **When you reach the goal,** a chime plays and the lock relaxes. The Dock, menu bar and Cmd-Tab come back, and the page stays full screen until you press Esc. You can keep writing as long as you like.
 - **Your streak** counts consecutive days. Until today counts, the streak shown is the one through yesterday.
 - **Pages** are saved as `2026-10-23.md` in the folder you pick on first launch. File names are always ISO dates, and an open page keeps its file if the time zone changes. Autosave runs every 5 seconds, whenever you switch away, and on quit. A day with no writing gets no file.
+- **Editing today's page elsewhere** (in Obsidian, or through sync) is fine. If Good Morning has nothing unsaved, your change shows up in it within a few seconds. If both changed, Good Morning keeps its writing as today's page and saves the other version beside it, as `2026-10-23 other version 10.32.15.md`, and tells you. Nothing is written over.
 - **If a save fails** (say the folder's drive is gone), the page stays on screen with the error and autosave keeps trying. Before leaving a page it couldn't save (changing folders, a new day, quitting), Good Morning copies it to its own Unsaved Pages folder and tells you where. That's `Application Support/Good Morning/Unsaved Pages` inside the app's container in `~/Library/Containers`. If even that fails, quitting asks first. A page that can't be read is left untouched and not shown.
 - **Time is logged** in a hidden `.good-morning.json` in the same folder. Word counts come from the files themselves, but time can't, so it's stored there. Obsidian ignores dotfiles. If you delete the log, you lose only the days that counted by time; days that reached the word goal still count. A damaged log is repaired, keeping every day that still reads, and the original is saved beside it as a hidden file.
 - **If the app stays open overnight,** switching back to it the next morning starts a new page and locks again.
@@ -62,7 +63,6 @@ Then press Cmd-R. `project.yml` already sets the deployment target, the sandbox 
 ## Known limits
 
 - Only the screen the window is on is covered. Other displays stay usable.
-- If you edit today's file in another app while Good Morning is open, Good Morning's next autosave overwrites those edits. Edit past days freely.
 - The word count splits on whitespace, so markdown symbols like `#` count as words.
 
 ## License

@@ -68,17 +68,31 @@ final class JournalStore {
         folder?.appending(path: "\(day.key).md")
     }
 
-    /// The day's page, or "" if it hasn't been written yet. Any other failure (no permission, not UTF-8,
-    /// the drive gone) throws, so a page that couldn't be read is never mistaken for a blank one.
+    /// The day's page, or "" if it hasn't been written yet. Fails as readExisting does.
     func read(_ day: Day) throws -> String {
-        guard let url = pageURL(for: day) else { return "" }
+        try readExisting(day) ?? ""
+    }
+
+    /// The day's page, or nil if it hasn't been written yet. Any other failure (no permission, not UTF-8,
+    /// the drive gone) throws, so a page that couldn't be read is never mistaken for a missing one.
+    func readExisting(_ day: Day) throws -> String? {
+        guard let url = pageURL(for: day) else { return nil }
         do {
             return try String(contentsOf: url, encoding: .utf8)
         } catch let error as CocoaError where error.code == .fileReadNoSuchFile {
             // Not written yet, unless the folder itself is gone (moved, or on a drive that's unplugged).
             guard folderIsThere else { throw FolderMissing() }
-            return ""
+            return nil
         }
+    }
+
+    /// When the page was changed elsewhere (Obsidian, sync) while Good Morning had changes too, the other version
+    /// is kept beside it, as "2026-10-24 other version 10.32.15.md", before Good Morning's is written. Returns where.
+    func saveOtherVersion(_ text: String, for day: Day) throws -> URL {
+        guard let folder else { throw FolderMissing() }
+        let url = Self.unusedURL(in: folder, name: "\(day.key) other version \(Self.stamp("HH.mm.ss"))", extension: "md")
+        try text.write(to: url, atomically: true, encoding: .utf8)
+        return url
     }
 
     private var folderIsThere: Bool {
@@ -214,11 +228,11 @@ final class JournalStore {
 
     // MARK: Helpers
 
-    /// "2026-10-24 103215", for names of copies that mustn't collide.
-    private static func stamp() -> String {
+    /// "2026-10-24 103215" (or another format), for names of copies that mustn't collide.
+    private static func stamp(_ format: String = "yyyy-MM-dd HHmmss") -> String {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "yyyy-MM-dd HHmmss"
+        formatter.dateFormat = format
         return formatter.string(from: Date())
     }
 

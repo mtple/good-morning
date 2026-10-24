@@ -11,6 +11,8 @@ import Observation
 /// - Once the goal is met the lock relaxes on its own. You can keep writing as long as you like.
 /// - Writing is never dropped: a page that won't save stays in memory, and is copied aside before anything replaces it.
 ///   A page that won't open is left as it is, and isn't shown or locked until it opens.
+/// - Today's page can be edited elsewhere too (Obsidian, or sync). With nothing unsaved here, the change is taken in.
+///   If both changed, the other version is saved beside the page before this one is written, so both are kept.
 @MainActor
 @Observable
 final class Session {
@@ -54,6 +56,7 @@ final class Session {
     @ObservationIgnored private weak var window: NSWindow?
     @ObservationIgnored private var day = Day.today
     @ObservationIgnored private var textDirty = false
+    @ObservationIgnored private var onDisk: String?  // today's file as last read or written here (nil: no file)
     @ObservationIgnored private var saveFailure = ""  // why the page last failed to save, for the alerts
     @ObservationIgnored private var pageProblem: String?  // the last page write's failure, kept until one works
     private var runningSince: SuspendingClock.Instant?  // the timer is running: page full screen, app frontmost, nobody away
@@ -65,27 +68,39 @@ final class Session {
     @ObservationIgnored private var hasOpened = false
     @ObservationIgnored private var isTurningPage = false  // a new folder or new day is under way
     @ObservationIgnored private var notices: [Notice] = []
+    @ObservationIgnored private var lastEdit: SuspendingClock.Instant?  // when you last typed
 
-    /// Something to tell you that can wait for a calm moment (see showNotice).
-    private struct Notice {
+    /// Something to tell you that can wait for a calm moment (see showNotice). Kept across a quit if it wasn't shown.
+    private struct Notice: Codable {
         let title: String
         let text: String
         var file: URL?
-        var defaultsKey: String?  // cleared once it's been shown, so a notice from last time isn't lost
     }
 
-    private static let rescuedOnQuitKey = "rescuedOnQuit"
+    private static let noticesKey = "pendingNotices"
 
     init() {
         folderURL = store.folder
         logNotice = store.logNotice
-        // A page copied aside while quitting last time: said now, rather than holding up that quit.
-        if let path = UserDefaults.standard.string(forKey: Self.rescuedOnQuitKey) {
-            let file = URL(fileURLWithPath: path)
-            notices.append(Notice(title: "Last time, your page couldn't be saved to your folder",
-                                  text: "So nothing was lost, a copy was saved as “\(file.lastPathComponent)” in Good Morning's Unsaved Pages folder.",
-                                  file: file, defaultsKey: Self.rescuedOnQuitKey))
+        // Anything not yet said when the app last quit (a page copied aside while quitting, say).
+        if let saved = UserDefaults.standard.data(forKey: Self.noticesKey) {
+            UserDefaults.standard.removeObject(forKey: Self.noticesKey)
+            notices = (try? JSONDecoder().decode([Notice].self, from: saved)) ?? []
         }
+        // Left by an earlier build, which kept only this one.
+        if let path = UserDefaults.standard.string(forKey: "rescuedOnQuit") {
+            UserDefaults.standard.removeObject(forKey: "rescuedOnQuit")
+            let file = URL(fileURLWithPath: path)
+            notices.append(Notice(title: "Your page couldn't be saved to your folder",
+                                  text: "So nothing was lost, a copy was saved as “\(file.lastPathComponent)” in Good Morning's Unsaved Pages folder.",
+                                  file: file))
+        }
+    }
+
+    /// On quit: notices not yet shown wait for the next launch, rather than holding up a logout or restart.
+    func keepNoticesForNextLaunch() {
+        guard !notices.isEmpty, let data = try? JSONEncoder().encode(notices) else { return }
+        UserDefaults.standard.set(data, forKey: Self.noticesKey)
     }
 
     // MARK: Lifecycle
@@ -108,6 +123,7 @@ final class Session {
     func appDidBecomeActive() {
         updateClock()
         startNewDayIfNeeded()
+        takeInOutsideChange()  // back from Obsidian, say
     }
 
     /// Switching to another app stops the timer and saves.
@@ -119,7 +135,7 @@ final class Session {
     /// On quit. True once the page is saved or copied aside. If neither works, you choose: save a copy
     /// somewhere, stay, or quit and lose what's unsaved. False keeps the app open.
     func prepareToQuit() -> Bool {
-        if keepPageSafe(quitting: true) { return true }
+        if keepPageSafe() { return true }
         let alert = NSAlert()
         alert.messageText = "Today's page couldn't be saved"
         alert.informativeText = "\(saveFailure)\n\nIf you quit now, what you've written since the last save is lost."
@@ -188,9 +204,11 @@ final class Session {
         hasOpened = true
         day = .today
         do {
-            text = try store.read(day)
+            onDisk = try store.readExisting(day)
+            text = onDisk ?? ""
             loadError = nil
         } catch {
+            onDisk = nil
             text = ""
             loadError = "Couldn't open \(day.key).md: \(error.localizedDescription)"
         }
@@ -227,6 +245,7 @@ final class Session {
         text = newText
         wordCount = countWords(newText)
         textDirty = true
+        lastEdit = .now
         checkGoal()
     }
 
@@ -243,7 +262,9 @@ final class Session {
         var pageIsSafe = true
         if textDirty, loadError == nil {
             do {
+                try keepOtherVersion()
                 try store.write(text, for: day)
+                if !(text.isEmpty && onDisk == nil) { onDisk = text }  // an empty page with no file stays without one
                 textDirty = false
                 pageProblem = nil
             } catch {
@@ -270,20 +291,67 @@ final class Session {
         return pageIsSafe
     }
 
+    /// Before writing over today's file: if it was changed elsewhere since it was last read or written here, that
+    /// version is saved beside it first, so both are kept. A file that has gone is simply written again. Throws if
+    /// the file can't be checked or the other version can't be kept, and then nothing is written over.
+    private func keepOtherVersion() throws {
+        guard let current = try store.readExisting(day), current != onDisk else { return }
+        if current != text {  // unless it already says what's here (a sync echo, say)
+            let copy = try store.saveOtherVersion(current, for: day)
+            notices.append(Notice(title: "Today's page was also changed outside Good Morning",
+                                  text: "Your writing here is still today's page. The other version was saved beside it as “\(copy.lastPathComponent)”.",
+                                  file: copy))
+        }
+        onDisk = current  // kept once it's safe, so a failed write below doesn't copy it again on every retry
+    }
+
+    /// A change made elsewhere (Obsidian, sync) while nothing here is waiting to be saved: show it, so what you type
+    /// next adds to it rather than to an older page. Only once you've paused, so it can't land under a keystroke or
+    /// an input method's composition. If it would lose writing (an older synced version, say), the version here is
+    /// kept beside it first, just in case; if that can't be done, the change waits.
+    private func takeInOutsideChange() {
+        guard hasOpened, loadError == nil, !textDirty, !isTurningPage, isPaused,
+              let current = try? store.readExisting(day), current != onDisk else { return }
+        if let mine = onDisk, losesWriting(from: mine, to: current) {
+            guard let copy = try? store.saveOtherVersion(mine, for: day) else { return }
+            notices.append(Notice(title: "Today's page changed outside Good Morning",
+                                  text: "Some of what Good Morning had isn't in the new version, so that version was saved beside it as “\(copy.lastPathComponent)”, just in case.",
+                                  file: copy))
+        }
+        onDisk = current
+        text = current
+        wordCount = countWords(current)
+        checkGoal()
+    }
+
+    /// Whether taking in `new` would lose writing from `old`: it has fewer words, or more than about a sentence of
+    /// `old` is missing between where they start and end alike (an older version with additions, say).
+    /// Additions and small fixes don't count, so ordinary edits in Obsidian don't leave copies behind.
+    private func losesWriting(from old: String, to new: String) -> Bool {
+        if countWords(new) < countWords(old) { return true }
+        let start = zip(old, new).prefix { $0 == $1 }.count
+        let end = zip(old.reversed(), new.reversed()).prefix { $0 == $1 }.count
+        let missing = old.count - start - min(end, old.count - start, new.count - start)
+        return missing > 40
+    }
+
+    /// No typing in the last two seconds, and nothing half-composed in an input method.
+    private var isPaused: Bool {
+        if let lastEdit, lastEdit.duration(to: .now) < .seconds(2) { return false }
+        if let textView = window?.firstResponder as? NSTextView, textView.hasMarkedText() { return false }
+        return true
+    }
+
     /// Before anything replaces the page or its folder, or the app quits. Saves it, or if that fails, puts a copy
-    /// in the app's Unsaved Pages folder and says where: soon, or on the next launch if quitting, so a logout or
-    /// restart isn't held up by an alert. False only if neither worked, and then the page must stay.
-    private func keepPageSafe(quitting: Bool = false) -> Bool {
+    /// in the app's Unsaved Pages folder, with a notice saying where for a calm moment (the next launch, if
+    /// quitting), so nothing is held up by an alert. False only if neither worked, and then the page must stay.
+    private func keepPageSafe() -> Bool {
         if save() { return true }
         guard let url = try? store.rescue(text, for: day) else { return false }
         textDirty = false
-        if quitting {
-            UserDefaults.standard.set(url.path(percentEncoded: false), forKey: Self.rescuedOnQuitKey)
-        } else {
-            notices.append(Notice(title: "Your page couldn't be saved to your folder",
-                                  text: "\(saveFailure)\n\nSo nothing was lost, a copy was saved as “\(url.lastPathComponent)” in Good Morning's Unsaved Pages folder.",
-                                  file: url))
-        }
+        notices.append(Notice(title: "Your page couldn't be saved to your folder",
+                              text: "\(saveFailure)\n\nSo nothing was lost, a copy was saved as “\(url.lastPathComponent)” in Good Morning's Unsaved Pages folder.",
+                              file: url))
         return true
     }
 
@@ -295,7 +363,6 @@ final class Session {
         guard !notices.isEmpty, NSApp.isActive, !isFullScreen, pendingLock == nil, !isTurningPage,
               let window, window.attachedSheet == nil else { return }
         let notice = notices.removeFirst()
-        if let key = notice.defaultsKey { UserDefaults.standard.removeObject(forKey: key) }
         let alert = NSAlert()
         alert.messageText = notice.title
         alert.informativeText = notice.text
@@ -344,6 +411,7 @@ final class Session {
         // A page that couldn't be read is tried again, so a drive that comes back recovers. Only while the app is
         // frontmost, so the lock that follows can't take the screen from another app.
         if loadError != nil, NSApp.isActive, !isTurningPage, (try? store.read(day)) != nil { openToday() }
+        takeInOutsideChange()
         bankTime()
         checkGoal()
         save()

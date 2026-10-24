@@ -57,5 +57,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         session.save()
+        session.keepNoticesForNextLaunch()
     }
 }
