@@ -44,20 +44,35 @@ enum Appearance: String, CaseIterable {
     }
 }
 
-/// A calendar day in the user's time zone. Its key doubles as the file name: 2026-10-23.md
+/// A calendar date where the user is. Its key doubles as the file name: 2026-10-23.md
+///
+/// The date is held as noon UTC on that day: a plain calendar date with no time zone in it. So the key of
+/// a page that's open can't change under it when the Mac's time zone or calendar setting changes, and adding
+/// days never drifts. File names are always Gregorian ISO dates, whatever calendar the Mac is set to.
 struct Day: Hashable {
     let date: Date
 
-    static var today: Day { Day(date: Calendar.current.startOfDay(for: Date())) }
+    static var today: Day {
+        var here = Calendar(identifier: .gregorian)
+        here.timeZone = .current
+        let c = here.dateComponents([.year, .month, .day], from: Date())
+        return Day(date: utc.date(from: DateComponents(year: c.year, month: c.month, day: c.day, hour: 12)) ?? Date())
+    }
 
     var key: String {
-        let c = Calendar.current.dateComponents([.year, .month, .day], from: date)
+        let c = Self.utc.dateComponents([.year, .month, .day], from: date)
         return String(format: "%04d-%02d-%02d", c.year ?? 0, c.month ?? 0, c.day ?? 0)
     }
 
     func adding(days: Int) -> Day {
-        Day(date: Calendar.current.date(byAdding: .day, value: days, to: date) ?? date)
+        Day(date: Self.utc.date(byAdding: .day, value: days, to: date) ?? date)
     }
+
+    private static let utc: Calendar = {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC") ?? .gmt
+        return calendar
+    }()
 }
 
 func countWords(_ text: String) -> Int {

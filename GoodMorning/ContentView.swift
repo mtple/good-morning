@@ -11,10 +11,16 @@ struct ContentView: View {
             if session.folderURL != nil {
                 VStack(spacing: 0) {
                     ProgressLine(progress: session.progress)
-                    EditorView(text: session.text, isFocused: !session.isShowingCommands && !session.isShowingHelp,
-                               onChange: { session.edit($0) })
-                        .frame(maxWidth: 680)
-                        .frame(maxWidth: .infinity)
+                    if let loadError = session.loadError {
+                        // No editor until the page can be read, so nothing typed here can replace it.
+                        UnreadablePage(error: loadError, reveal: session.canRevealPage ? { session.revealPage() } : nil,
+                                       chooseFolder: { session.chooseFolder() })
+                    } else {
+                        EditorView(text: session.text, isFocused: !session.isShowingCommands && !session.isShowingHelp,
+                                   onChange: { session.edit($0) })
+                            .frame(maxWidth: 680)
+                            .frame(maxWidth: .infinity)
+                    }
                     // Under the text, where the eye is, not out in the corners of a full-screen page.
                     StatusBar(session: session)
                         .frame(maxWidth: 680)
@@ -58,13 +64,12 @@ private struct StatusBar: View {
     let session: Session
 
     var body: some View {
-        HStack(spacing: 0) {
+        // The word count stays centered, whatever the two sides hold, and never runs into them.
+        StatusBarLayout(gap: 16) {
             left
-            Spacer(minLength: 16)
+            center.frame(maxWidth: 260)
             right
         }
-        // The word count stays centered, whatever the two sides hold.
-        .overlay { center.frame(maxWidth: 240) }
         .lineLimit(1)
         .font(.system(size: 12).monospacedDigit())
         .foregroundStyle(.secondary)
@@ -83,7 +88,7 @@ private struct StatusBar: View {
                 } else {
                     Text(clock(session.secondsLeft))
                 }
-                if !session.isFullScreen {
+                if !session.isFullScreen, session.loadError == nil {  // no locking in to a page that isn't there
                     Button("Lock in") { session.lockIn() }
                         .buttonStyle(.link)
                         .help("Shift-Command-L")
@@ -100,7 +105,9 @@ private struct StatusBar: View {
 
     @ViewBuilder private var center: some View {
         if let error = session.errorMessage {
-            Text(error).foregroundStyle(.red).lineLimit(1)
+            Text(error)
+                .foregroundStyle(.red)
+                .help(error)  // the bar may cut it short
         } else {
             Text("\(session.wordCount.formatted()) / \(session.wordGoal.formatted()) words")
         }
@@ -126,6 +133,36 @@ private struct StatusBar: View {
 
     private func clock(_ seconds: Int) -> String {
         String(format: "%d:%02d", seconds / 60, seconds % 60)
+    }
+}
+
+/// Left, middle and right on one line. The two ends get their full width. The middle sits centered
+/// if it fits between them, moves over just enough if it doesn't, and only then truncates. Nothing overlaps.
+private struct StatusBarLayout: Layout {
+    let gap: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
+        let width = sizes.reduce(0) { $0 + $1.width } + gap * CGFloat(max(0, sizes.count - 1))
+        return CGSize(width: proposal.width ?? width, height: sizes.map(\.height).max() ?? 0)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard subviews.count == 3 else { return }
+        let (left, middle, right) = (subviews[0], subviews[1], subviews[2])
+        let rightWidth = min(right.sizeThatFits(.unspecified).width, bounds.width)
+        let leftWidth = min(left.sizeThatFits(.unspecified).width, max(0, bounds.width - rightWidth - gap))
+        let start = bounds.minX + leftWidth + gap
+        let end = bounds.maxX - rightWidth - gap
+        let width = min(middle.sizeThatFits(.unspecified).width, max(0, end - start))
+        let x = max(start, min(bounds.midX - width / 2, end - width))
+
+        left.place(at: CGPoint(x: bounds.minX, y: bounds.midY), anchor: .leading,
+                   proposal: ProposedViewSize(width: leftWidth, height: nil))
+        middle.place(at: CGPoint(x: x, y: bounds.midY), anchor: .leading,
+                     proposal: ProposedViewSize(width: width, height: nil))
+        right.place(at: CGPoint(x: bounds.maxX, y: bounds.midY), anchor: .trailing,
+                    proposal: ProposedViewSize(width: rightWidth, height: nil))
     }
 }
 
@@ -167,6 +204,37 @@ private struct Welcome: View {
                 .padding(.top, 6)
         }
         .padding(40)
+    }
+}
+
+// MARK: - Unreadable page
+
+/// In place of the editor when today's page couldn't be read. The file is left as it is while the session tries again.
+private struct UnreadablePage: View {
+    let error: String
+    let reveal: (() -> Void)?  // nil when there's nothing in Finder to show
+    let chooseFolder: () -> Void
+
+    var body: some View {
+        VStack(spacing: 14) {
+            Text("Today's page couldn't be opened")
+                .font(.system(size: 24, design: .serif))
+            Text(error)
+                .foregroundStyle(.secondary)
+            Text("Nothing has been changed. Fix or move the file, or choose another folder. Good Morning keeps trying in the meantime.")
+                .foregroundStyle(.secondary)
+            HStack {
+                if let reveal {
+                    Button("Show in Finder", action: reveal)
+                }
+                Button("Choose Another Folder…", action: chooseFolder)
+            }
+            .padding(.top, 6)
+        }
+        .multilineTextAlignment(.center)
+        .frame(maxWidth: 460)
+        .padding(40)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 

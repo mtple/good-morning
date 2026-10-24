@@ -50,6 +50,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         session.appWillResignActive()
     }
 
+    // If today's page can't be saved or copied aside, you choose whether to quit and lose it.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        session.prepareToQuit() ? .terminateNow : .terminateCancel
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
         session.save()
     }
