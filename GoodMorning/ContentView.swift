@@ -297,7 +297,7 @@ private struct HelpCard: View {
                 point("Esc steps out and pauses the timer. ⌘L locks you back in, or steps out. The timer only runs while the page is full screen and Good Morning is in front.")
                 point("Reaching a goal plays a chime, counts the day toward your streak, and gives back the Dock and Cmd-Tab.")
                 point("Your page saves itself every few seconds as a plain markdown file, one per day, in \(folder).")
-                point("⌘+ and ⌘− change the text size. ⌘P shows every command, like dark mode or a wider page. ⌘, opens Settings.")
+                point("⌘+ and ⌘− change the text size. ⌘P shows every command, like dark mode, a wider page or a typewriter sound. ⌘, opens Settings.")
             }
             .foregroundStyle(.secondary)
             HStack {

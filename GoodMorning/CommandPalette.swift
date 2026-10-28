@@ -95,6 +95,10 @@ struct CommandPalette: View {
         commands.append(Command(title: "Narrower Lines", keywords: "line width column page measure") {
             Prefs.changeLineWidth(by: -Prefs.lineWidthStep)
         })
+        commands.append(Command(title: "Typewriter Sound", keywords: "typing keys click clack audio noise",
+                                isChecked: Prefs.typingSound) {
+            Prefs.setTypingSound(!Prefs.typingSound)
+        })
         let current = Prefs.appearance
         for appearance in Appearance.allCases {
             commands.append(Command(title: "Appearance: \(appearance.title)", keywords: "mode theme color night day",
