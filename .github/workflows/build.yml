@@ -1,6 +1,6 @@
 # Builds the app on a Mac for every push, so a change that doesn't compile shows up before anyone opens Xcode,
-# then launches it, types into it and saves screenshots of each step (the "screenshots" artifact).
-# Built unsigned, so without the sandbox: smoke.sh can then point it at a pages folder through its defaults.
+# then launches it, types into it and saves screenshots of each step (see .github/scripts/smoke.sh).
+# Built unsigned, so it runs without the sandbox; sandbox-only behavior still needs a real build to check.
 name: Build
 
 # Only when the app or this workflow changes, not for README edits.
@@ -19,7 +19,7 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Show Xcode
         run: xcodebuild -version
       - name: Build
@@ -28,16 +28,16 @@ jobs:
           xcodebuild -project GoodMorning.xcodeproj -target GoodMorning -configuration Debug \
             SYMROOT="$PWD/build" CODE_SIGNING_ALLOWED=NO build 2>&1 | tee build.log | grep -E "error:|warning:|BUILD" || true
           grep -q "BUILD SUCCEEDED" build.log
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         if: always()
         with:
           name: build-log
           path: build.log
+      # Fails only if the app crashed. Everything else is for a person to judge from the screenshots.
       - name: Smoke run
-        continue-on-error: true
         timeout-minutes: 6
         run: .github/scripts/smoke.sh build/Debug/GoodMorning.app
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         if: always()
         with:
           name: screenshots

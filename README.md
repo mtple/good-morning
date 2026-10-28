@@ -47,6 +47,8 @@ Then press Cmd-R. `project.yml` already sets the deployment target, the sandbox 
 4. Open **Signing & Capabilities → App Sandbox → File Access** and set **User Selected File** to **Read/Write**. Without this, the app can't save into the folder you pick. `GoodMorning/GoodMorning.entitlements` shows the complete set.
 5. Press Cmd-R.
 
+**On GitHub,** every push that touches the app builds it on a Mac, launches it, types into it and screenshots each step (`.github/workflows/build.yml`). The screenshots are in the run's `screenshots` artifact, and the latest set is also on the `ci-screenshots` branch.
+
 **Debugging tip:** if you hit a breakpoint while the app is locked, the full-screen window covers Xcode and Cmd-Tab won't work. Press Cmd-Option-Esc, or swipe up for Mission Control, to get back to Xcode.
 
 ## Code

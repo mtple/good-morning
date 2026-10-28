@@ -1,6 +1,6 @@
 #!/bin/bash
 # Launches the built app on the CI Mac, drives it with keystrokes, and screenshots each step into shots/.
-# Not a pass/fail test: the screenshots are for a person (or Claude) to look at.
+# Fails only if the app is no longer running at the end. The rest is for a person (or Claude) to judge from the screenshots.
 set -u
 APP="$1"
 mkdir -p shots
@@ -58,3 +58,4 @@ ls shots
 echo "--- pages folder"; ls -la "$HOME/Pages"
 echo "--- end of today's page"; cat "$HOME/Pages"/2*.md | tail -c 400; echo
 echo "--- app log"; tail -40 app.log
+pgrep -x GoodMorning > /dev/null || { echo "::error::Good Morning quit or crashed during the smoke run"; exit 1; }
