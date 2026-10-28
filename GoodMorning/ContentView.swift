@@ -188,8 +188,7 @@ private struct ProgressLine: View {
 // MARK: - Margins
 
 /// The empty space either side of the text, put to work: bands of morning colour stack up on the left as
-/// you write, and on the right grains of sand fall down the margin as the minutes pass. Soft and slow
-/// enough to stay out of the way at the edge of your eye.
+/// you write, and on the right grains of sand drop through the margin as the minutes pass, one at a time.
 private struct Margins: View {
     let session: Session
 
@@ -214,7 +213,7 @@ private struct Margins: View {
 
                 Group {
                     if session.isTimerRunning, !reduceMotion {
-                        // Smooth enough for a grain in flight. Twenty dots cost next to nothing to redraw.
+                        // Smooth enough for a falling grain. A few dozen dots cost next to nothing to redraw.
                         TimelineView(.animation(minimumInterval: 1.0 / 30)) { _ in grains }
                     } else if session.isTimerRunning {
                         TimelineView(.periodic(from: .now, by: 1)) { _ in grains }
@@ -222,7 +221,7 @@ private struct Margins: View {
                         grains
                     }
                 }
-                .frame(width: 32, height: height)
+                .frame(width: SandColumn.width, height: height)
                 .help(minutesText)
                 .accessibilityElement()
                 .accessibilityLabel("Time")
@@ -234,8 +233,8 @@ private struct Margins: View {
     }
 
     private var grains: some View {
-        FallingGrains(elapsed: session.elapsedExact, goal: Double(max(1, session.secondsGoal)),
-                      reduceMotion: reduceMotion)
+        SandColumn(elapsed: session.elapsedExact, goal: Double(max(1, session.secondsGoal)),
+                   reduceMotion: reduceMotion)
             // Paused: everything stays where it is, just quieter.
             .opacity(session.isTimerRunning || session.isComplete ? 1 : 0.5)
     }
@@ -258,7 +257,7 @@ private func dawn(at height: Double) -> Color {
                  blue: low.2 + (high.2 - low.2) * height)
 }
 
-/// A fixed number in 0..<1 for each grain and `salt`, so every grain has its own manner, the same every day.
+/// A fixed number in 0..<1 for each grain and `salt`, so every grain has its own timing, the same every day.
 private func noise(_ grain: Int, _ salt: Int) -> Double {
     let value = sin(Double(grain * 31 + salt * 17 + 1) * 12.9898) * 43758.5453
     return value - value.rounded(.down)
@@ -287,128 +286,216 @@ private struct WordBands: View {
     }
 }
 
-/// The time as ten grains of sand, each a tenth of the goal, in a column of twenty places. They start
-/// stacked in the top half. In each stretch the lowest grain lets go, the ones above slide down after it,
-/// and it falls to the pile at the bottom, at its own uneven pace, swaying a little, and lands with a small
-/// bounce. With Reduce Motion on, nothing moves: the top empties from its surface and the pile fills from
-/// the floor, each grain fading across.
-private struct FallingGrains: View {
+/// The time as sand: thirty solid grains in a column three wide, one for each thirtieth of the goal,
+/// starting in the top half. Drawn from `Sandglass`, which works out where every grain is.
+private struct SandColumn: View {
     let elapsed: Double  // seconds on the page today
     let goal: Double     // seconds in the time goal
     var reduceMotion = false
 
-    private static let grains = 10
-    private static let diameter: CGFloat = 17
+    static let diameter: CGFloat = 14
+    static let across: CGFloat = 19  // centre to centre, side to side
+    static let width = across * 2 + diameter
 
     var body: some View {
         Canvas { context, size in
-            let rows = Self.grains * 2
-            let pitch = size.height / CGFloat(rows)
-            let middle = size.width / 2
-            let stretch = goal / Double(Self.grains)
-            let progress = max(0, elapsed / stretch)
-            let current = Int(progress.rounded(.down))  // the grain on the move
-            let into = (progress - Double(current)) * stretch  // seconds into its stretch
-            let mover = current < Self.grains && !reduceMotion
-                ? Fall(grain: current, stretch: stretch, distance: CGFloat(Self.grains - current)) : nil
-
-            for row in 0..<rows {
-                context.stroke(Self.dot(at: CGPoint(x: middle, y: (CGFloat(row) + 0.5) * pitch)),
-                               with: .color(.primary.opacity(0.1)), lineWidth: 1)
+            let pitch = size.height / CGFloat(Sandglass.depth * 2)
+            func dot(_ column: CGFloat, _ row: CGFloat) -> Path {
+                let x = size.width / 2 + (column - 1) * Self.across, y = (row + 0.5) * pitch
+                return Path(ellipseIn: CGRect(x: x - Self.diameter / 2, y: y - Self.diameter / 2,
+                                              width: Self.diameter, height: Self.diameter))
             }
-            for grain in 0..<Self.grains {
-                for place in places(of: grain, current: current, into: into, stretch: stretch,
-                                    mover: mover, pitch: pitch) where place.amount > 0 {
-                    let center = CGPoint(x: middle + place.x, y: (place.row + 0.5) * pitch)
-                    let color = dawn(at: min(1, max(0, 1 - Double(center.y / size.height))))
-                    context.fill(Self.dot(at: center), with: .color(color.opacity(0.5 * place.amount)))
+            for row in 0..<Sandglass.depth * 2 {
+                for column in 0..<3 {
+                    context.stroke(dot(CGFloat(column), CGFloat(row)), with: .color(.primary.opacity(0.1)), lineWidth: 1)
                 }
             }
+            for place in Sandglass.places(elapsed: elapsed, goal: goal, pitch: pitch, calm: reduceMotion)
+            where place.amount > 0 {
+                let height = 1 - Double((place.row + 0.5) * pitch / size.height)
+                context.fill(dot(place.column, place.row),
+                             with: .color(dawn(at: min(1, max(0, height))).opacity(place.amount)))
+            }
         }
-    }
-
-    /// Where a grain is drawn: a sideways offset in points, a row (0 at the top, with fractions in between),
-    /// and how strongly. A grain fading across under Reduce Motion is drawn in two places at once.
-    private func places(of grain: Int, current: Int, into: Double, stretch: Double, mover: Fall?,
-                        pitch: CGFloat) -> [(x: CGFloat, row: CGFloat, amount: Double)] {
-        let neck = CGFloat(Self.grains - 1)  // the lowest place in the top half, where grains let go
-        let pile = CGFloat(Self.grains * 2 - 1 - grain)  // where this grain comes to rest
-        if grain < current { return [(x: 0, row: pile, amount: 1)] }
-        guard let mover else {
-            let moved = grain == current ? into / stretch : 0
-            return [(x: 0, row: CGFloat(grain), amount: 1 - moved), (x: 0, row: pile, amount: moved)]
-        }
-        if grain == current {
-            let at = mover.position(at: into)
-            return [(x: at.x, row: neck + at.fallen - at.lift / pitch, amount: 1)]
-        }
-        // Still in the top half, stacked down to the neck. They slide down a place each time the one below lets go.
-        return [(x: 0, row: neck - CGFloat(grain - current) + mover.settled(at: into), amount: 1)]
-    }
-
-    private static func dot(at center: CGPoint) -> Path {
-        Path(ellipseIn: CGRect(x: center.x - diameter / 2, y: center.y - diameter / 2,
-                               width: diameter, height: diameter))
     }
 }
 
-/// One grain's trip down the margin. Each grain has its own: when it lets go, how long it takes,
-/// how its speed comes and goes, how it sways, and how high it bounces when it lands.
-private struct Fall {
-    let distance: CGFloat  // rows from the neck to its place on the pile
-    let start: Double      // seconds into the stretch when it lets go
-    let end: Double        // seconds into the stretch when it lands
-    let bounceTime: Double
-    let settleStart: Double  // when it has cleared the neck, so the grains above can follow
-    let settleTime: Double
-    let sway: CGFloat, swayTurns: Double, swayPhase: Double
-    let wobble: Double, wobblePhase: Double
-    let bounce: CGFloat  // points
+/// Where the sand is at any moment. Columns are 0 (left), 1 (middle) and 2 (right). Rows run from 0 at
+/// the top; the top half is rows 0 to 9, with the neck at 9, and the bottom half rows 10 to 19.
+///
+/// In each stretch the lowest middle grain drops through the neck under gravity, bounces off the pile with
+/// most of its speed lost, and rolls off to a lower side if there is one, so the pile builds into a mound.
+/// The middle column above it drops a place, and a side two grains higher slides its top grain into the
+/// dip, so the top drains from the middle as real sand does. Each grain lets go at its own moment.
+/// With Reduce Motion on, nothing moves: grains fade from the top half to the bottom instead.
+private enum Sandglass {
+    static let grains = 30
+    static let depth = 10  // rows in each half
+    static let gravity = 2400.0  // points per second squared
+    static let restitution = 0.3  // how much of its speed a grain keeps on each bounce
+    static let rollTime = 0.3
+    static let slideTime = 0.35
 
-    init(grain: Int, stretch: Double, distance: CGFloat) {
-        self.distance = distance
-        bounceTime = min(1.4, stretch * 0.1)
-        settleTime = min(2.5, stretch * 0.1)
-        // Longer drops take longer, give or take, and each one waits a different while before letting go.
-        let room = stretch - bounceTime
-        let length = min(room, room * (0.35 + 0.05 * Double(distance)) * (0.85 + 0.3 * noise(grain, 1)))
-        start = (room - length) * noise(grain, 2)
-        end = start + length
-        sway = 1.5 + 2 * CGFloat(noise(grain, 3))
-        swayTurns = 1 + 1.5 * noise(grain, 4)
-        swayPhase = noise(grain, 5)
-        wobble = 0.07 * noise(grain, 6)
-        wobblePhase = noise(grain, 7) * 2 * .pi
-        bounce = 4 + 4 * CGFloat(noise(grain, 8))
-        var q = 0.0
-        while q < 1, Self.drop(q, wobble: wobble, phase: wobblePhase) * Double(distance) < 1 { q += 0.01 }
-        // Finished before the next grain lets go, so nothing jumps between stretches.
-        settleStart = min(start + q * length, stretch - settleTime)
+    struct Place {
+        var column: CGFloat
+        var row: CGFloat
+        var amount = 1.0  // under 1 only while fading across with Reduce Motion
     }
 
-    /// How far down the drop it is, 0...1, a share `q` of the way through. Slow to start and quicker at the
-    /// end, like something falling, with a little give and take in the speed. Always moving downward.
-    private static func drop(_ q: Double, wobble: Double, phase: Double) -> Double {
-        0.6 * q * q + 0.4 * q + wobble * sin(4 * .pi * q + phase) * q * (1 - q)
+    /// One leg of a grain's trip, from `start` to `end` seconds into the stretch.
+    struct Leg {
+        let start: Double
+        let end: Double
+        let from: Place
+        let to: Place
+        let at: (Double) -> Place
     }
 
-    /// Sideways offset and bounce height in points, and rows fallen, `t` seconds into the stretch.
-    func position(at t: Double) -> (x: CGFloat, fallen: CGFloat, lift: CGFloat) {
-        if t <= start { return (x: 0, fallen: 0, lift: 0) }
-        if t < end {
-            let q = (t - start) / (end - start)
-            let x = sway * CGFloat(sin(2 * .pi * (q * swayTurns + swayPhase)) * sin(.pi * q))
-            return (x: x, fallen: distance * CGFloat(Self.drop(q, wobble: wobble, phase: wobblePhase)), lift: 0)
+    private struct Slot: Hashable {
+        let column: Int
+        let row: Int
+    }
+
+    static func places(elapsed: Double, goal: Double, pitch: CGFloat, calm: Bool) -> [Place] {
+        let stretch = goal / Double(grains)
+        let progress = max(0, elapsed / stretch)
+        let current = min(grains, Int(progress.rounded(.down)))  // the grain on the move
+        let into = (progress - Double(current)) * stretch  // seconds into its stretch
+        if calm { return calmPlaces(current: current, moved: current < grains ? into / stretch : 0) }
+
+        // Replay every trip so far to see how the heaps stand, then work out the one under way.
+        var top = [depth, depth, depth], bottom = [0, 0, 0]
+        for k in 0..<current { _ = trip(of: k, top: &top, bottom: &bottom, stretch: stretch, pitch: pitch) }
+        let before = (top: top, bottom: bottom)
+        let moves = current < grains ? trip(of: current, top: &top, bottom: &bottom, stretch: stretch, pitch: pitch) : []
+
+        let moving = Set(moves.map { Slot(column: Int($0[0].from.column), row: Int($0[0].from.row)) })
+        var out: [Place] = []
+        for column in 0..<3 {
+            for i in 0..<before.top[column] where !moving.contains(Slot(column: column, row: depth - 1 - i)) {
+                out.append(Place(column: CGFloat(column), row: CGFloat(depth - 1 - i)))
+            }
+            for i in 0..<before.bottom[column] {
+                out.append(Place(column: CGFloat(column), row: CGFloat(depth * 2 - 1 - i)))
+            }
         }
-        // Two and a half small hops, each lower than the last.
-        let τ = min(1, (t - end) / bounceTime)
-        return (x: 0, fallen: distance, lift: bounce * CGFloat(abs(sin(2.5 * .pi * τ)) * (1 - τ) * (1 - τ)))
+        for legs in moves { out.append(position(of: legs, at: into)) }
+        return out
     }
 
-    /// How far the grains above have slid down after it, 0...1.
-    func settled(at t: Double) -> CGFloat {
-        let s = min(1, max(0, (t - settleStart) / settleTime))
-        return CGFloat(s * s * (3 - 2 * s))
+    /// Grain `k`'s trip, worked out from the heaps as they stand, which it moves on to how they'll be after it.
+    /// Each inner list is one grain's legs.
+    private static func trip(of k: Int, top: inout [Int], bottom: inout [Int], stretch: Double,
+                             pitch: CGFloat) -> [[Leg]] {
+        let neck = CGFloat(depth - 1), floor = CGFloat(depth * 2 - 1)
+        func topRow(_ column: Int) -> CGFloat { neck - CGFloat(top[column]) + 1 }  // its highest grain
+        var moves: [[Leg]] = []
+        let busy = 2.2  // the longest a trip takes, give or take
+        var t = stretch > busy ? (stretch - busy) * (0.05 + 0.9 * noise(k, 2)) : 0
+
+        // The middle has run dry: a grain from a side rolls in over the neck first, then drops through it.
+        var legs: [Leg] = []
+        if top[1] == 0 {
+            let side = taller(top[0], top[2], k, 3)
+            legs.append(roll(from: Place(column: CGFloat(side), row: topRow(side)), to: Place(column: 1, row: neck),
+                             at: t, for: slideTime))
+            top[side] -= 1
+            top[1] = 1
+            t += slideTime
+        }
+        // The lowest middle grain drops through the neck, and rolls off the pile's peak if a side is lower.
+        top[1] -= 1
+        let land = floor - CGFloat(bottom[1])
+        let drop = fall(column: 1, from: neck, to: land, at: t, pitch: pitch)
+        legs.append(drop)
+        if bottom[1] > min(bottom[0], bottom[2]) {
+            let side = lower(bottom[0], bottom[2], k, 4)
+            legs.append(roll(from: Place(column: 1, row: land), to: Place(column: CGFloat(side), row: floor - CGFloat(bottom[side])),
+                             at: drop.end, for: rollTime))
+            bottom[side] += 1
+        } else {
+            bottom[1] += 1
+        }
+        moves.append(legs)
+
+        // The middle column above drops a place after it.
+        var settled = t
+        for i in 0..<top[1] {
+            let leg = fall(column: 1, from: neck - CGFloat(i) - 1, to: neck - CGFloat(i), at: t, pitch: pitch)
+            moves.append([leg])
+            settled = max(settled, leg.end)
+        }
+        // A side two higher than the middle lets its top grain slide down into the dip.
+        if max(top[0], top[2]) - top[1] >= 2 {
+            let side = taller(top[0], top[2], k, 5)
+            moves.append([roll(from: Place(column: CGFloat(side), row: topRow(side)),
+                               to: Place(column: 1, row: neck - CGFloat(top[1])), at: settled + 0.05, for: slideTime)])
+            top[side] -= 1
+            top[1] += 1
+        }
+        return moves
+    }
+
+    /// A drop from row `r0` to `r1` under gravity, then bounces, each keeping `restitution` of the speed,
+    /// until a bounce would rise less than half a point.
+    private static func fall(column: CGFloat, from r0: CGFloat, to r1: CGFloat, at start: Double, pitch: CGFloat) -> Leg {
+        let g = gravity, points = Double(pitch)
+        let drop = (2 * max(0, Double(r1 - r0)) * points / g).squareRoot()
+        var hops: [Double] = []
+        var speed = g * drop * restitution, end = start + drop
+        while speed * speed / (2 * g) > 0.5 {
+            hops.append(speed)
+            end += 2 * speed / g
+            speed *= restitution
+        }
+        let bounces = hops
+        return Leg(start: start, end: end, from: Place(column: column, row: r0), to: Place(column: column, row: r1)) { t in
+            var s = t - start
+            if s < drop { return Place(column: column, row: r0 + CGFloat(0.5 * g * s * s / points)) }
+            s -= drop
+            for hop in bounces {
+                let flight = 2 * hop / g
+                if s < flight { return Place(column: column, row: r1 - CGFloat((hop * s - 0.5 * g * s * s) / points)) }
+                s -= flight
+            }
+            return Place(column: column, row: r1)
+        }
+    }
+
+    /// A roll from one place to another: sideways quickly at first, and downward faster as it goes.
+    private static func roll(from a: Place, to b: Place, at start: Double, for duration: Double) -> Leg {
+        Leg(start: start, end: start + duration, from: a, to: b) { t in
+            let u = min(1, max(0, (t - start) / duration))
+            return Place(column: a.column + (b.column - a.column) * CGFloat(sin(.pi / 2 * u)),
+                         row: a.row + (b.row - a.row) * CGFloat(u * u))
+        }
+    }
+
+    private static func position(of legs: [Leg], at t: Double) -> Place {
+        if t <= legs[0].start { return legs[0].from }
+        for leg in legs where t < leg.end { return t < leg.start ? leg.from : leg.at(t) }
+        return legs[legs.count - 1].to
+    }
+
+    /// The taller side (0 or 2), or either one at even, the same way every day.
+    private static func taller(_ left: Int, _ right: Int, _ k: Int, _ salt: Int) -> Int {
+        left > right ? 0 : right > left ? 2 : noise(k, salt) < 0.5 ? 0 : 2
+    }
+
+    private static func lower(_ left: Int, _ right: Int, _ k: Int, _ salt: Int) -> Int {
+        left < right ? 0 : right < left ? 2 : noise(k, salt) < 0.5 ? 0 : 2
+    }
+
+    /// Reduce Motion: the top empties from its surface and the pile fills from the floor, middle first,
+    /// each grain fading across over its stretch.
+    private static func calmPlaces(current: Int, moved: Double) -> [Place] {
+        let order = [1, 0, 2]
+        return (0..<grains).flatMap { (k: Int) -> [Place] in
+            let column = CGFloat(order[k % 3]), row = CGFloat(k / 3)
+            let gone: Double = k < current ? 1 : k == current ? moved : 0
+            return [Place(column: column, row: row, amount: 1 - gone),
+                    Place(column: column, row: CGFloat(depth * 2 - 1) - row, amount: gone)]
+        }
     }
 }
 
