@@ -188,15 +188,17 @@ private struct ProgressLine: View {
 // MARK: - Margins
 
 /// The empty space either side of the text, put to work: bands of morning colour stack up on the left as
-/// you write, and on the right the minutes run through an hourglass of dots. Soft, and still enough that
-/// nothing moves at the edge of your eye. Each mark fades in or out slowly, never with a jump.
+/// you write, and on the right grains of sand fall down the margin as the minutes pass. Soft and slow
+/// enough to stay out of the way at the edge of your eye.
 private struct Margins: View {
     let session: Session
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         GeometryReader { geo in
             let side = (geo.size.width - 680) / 2  // the text column is 680 wide, centered
-            if side >= 140 {
+            if side >= 96 {
                 // Halfway out into the margin, but not so far that it leaves the page behind.
                 let inset = min(side / 2, 150)
                 let height = min(geo.size.height * 0.5, 420)
@@ -211,13 +213,16 @@ private struct Margins: View {
                     .position(x: side - inset, y: y)
 
                 Group {
-                    if session.isTimerRunning {
-                        TimelineView(.periodic(from: .now, by: 1)) { _ in hourglass }
+                    if session.isTimerRunning, !reduceMotion {
+                        // Smooth enough for a grain in flight. Twenty dots cost next to nothing to redraw.
+                        TimelineView(.animation(minimumInterval: 1.0 / 30)) { _ in grains }
+                    } else if session.isTimerRunning {
+                        TimelineView(.periodic(from: .now, by: 1)) { _ in grains }
                     } else {
-                        hourglass
+                        grains
                     }
                 }
-                .frame(width: Hourglass.size.width, height: Hourglass.size.height)
+                .frame(width: 32, height: height)
                 .help(minutesText)
                 .accessibilityElement()
                 .accessibilityLabel("Time")
@@ -228,9 +233,10 @@ private struct Margins: View {
         .ignoresSafeArea()
     }
 
-    private var hourglass: some View {
-        Hourglass(progress: Double(session.elapsedNow) / Double(max(1, session.secondsGoal)))
-            // Paused: the dots stay where they are, just quieter.
+    private var grains: some View {
+        FallingGrains(elapsed: session.elapsedExact, goal: Double(max(1, session.secondsGoal)),
+                      reduceMotion: reduceMotion)
+            // Paused: everything stays where it is, just quieter.
             .opacity(session.isTimerRunning || session.isComplete ? 1 : 0.5)
     }
 
@@ -250,6 +256,12 @@ private func dawn(at height: Double) -> Color {
     return Color(red: low.0 + (high.0 - low.0) * height,
                  green: low.1 + (high.1 - low.1) * height,
                  blue: low.2 + (high.2 - low.2) * height)
+}
+
+/// A fixed number in 0..<1 for each grain and `salt`, so every grain has its own manner, the same every day.
+private func noise(_ grain: Int, _ salt: Int) -> Double {
+    let value = sin(Double(grain * 31 + salt * 17 + 1) * 12.9898) * 43758.5453
+    return value - value.rounded(.down)
 }
 
 /// Ten bands stacked from the bottom, each a tenth of the word goal.
@@ -275,52 +287,128 @@ private struct WordBands: View {
     }
 }
 
-/// The time as an hourglass of ten dots, each a tenth of the goal. Dots leave the top heap from its
-/// surface down and settle into the bottom heap from the floor up, each one fading out above and in
-/// below over its stretch. The empty places stay as faint rings, so the hourglass keeps its shape.
-private struct Hourglass: View {
-    let progress: Double
+/// The time as ten grains of sand, each a tenth of the goal, in a column of twenty places. They start
+/// stacked in the top half. In each stretch the lowest grain lets go, the ones above slide down after it,
+/// and it falls to the pile at the bottom, at its own uneven pace, swaying a little, and lands with a small
+/// bounce. With Reduce Motion on, nothing moves: the top empties from its surface and the pile fills from
+/// the floor, each grain fading across.
+private struct FallingGrains: View {
+    let elapsed: Double  // seconds on the page today
+    let goal: Double     // seconds in the time goal
+    var reduceMotion = false
 
-    private static let rows = [4, 3, 2, 1]  // each heap, widest row first: the top's surface, the bottom's floor
-    private static let pitch: CGFloat = 28  // dot to dot along a row
-    private static let rise = pitch * 0.866  // row to row, so the dots pack like stacked balls
-    private static let neck: CGFloat = 14
-    private static let diameter: CGFloat = 20
-
-    static let size = CGSize(width: pitch * 4, height: rise * 7 + neck + diameter)
-
-    /// Every place in a heap, in the order the dots go: widest row first, from the middle out.
-    private static let slots: [(row: Int, column: Int)] = rows.indices.flatMap { (row: Int) -> [(row: Int, column: Int)] in
-        let middle = Double(rows[row] - 1) / 2
-        return (0..<rows[row])
-            .sorted { (abs(Double($0) - middle), $0) < (abs(Double($1) - middle), $1) }
-            .map { (row: row, column: $0) }
-    }
+    private static let grains = 10
+    private static let diameter: CGFloat = 17
 
     var body: some View {
         Canvas { context, size in
-            for (k, slot) in Self.slots.enumerated() {
-                let moved = fill(of: k, in: Self.slots.count, progress: progress)
-                for (center, amount) in [(Self.center(of: slot, inTop: true, size: size), 1 - moved),
-                                         (Self.center(of: slot, inTop: false, size: size), moved)] {
-                    let dot = Path(ellipseIn: CGRect(x: center.x - Self.diameter / 2, y: center.y - Self.diameter / 2,
-                                                     width: Self.diameter, height: Self.diameter))
-                    context.stroke(dot, with: .color(.primary.opacity(0.1)), lineWidth: 1)
-                    if amount > 0 {
-                        let color = dawn(at: 1 - Double(center.y / size.height))
-                        context.fill(dot, with: .color(color.opacity(0.5 * amount)))
-                    }
+            let rows = Self.grains * 2
+            let pitch = size.height / CGFloat(rows)
+            let middle = size.width / 2
+            let stretch = goal / Double(Self.grains)
+            let progress = max(0, elapsed / stretch)
+            let current = Int(progress.rounded(.down))  // the grain on the move
+            let into = (progress - Double(current)) * stretch  // seconds into its stretch
+            let mover = current < Self.grains && !reduceMotion
+                ? Fall(grain: current, stretch: stretch, distance: CGFloat(Self.grains - current)) : nil
+
+            for row in 0..<rows {
+                context.stroke(Self.dot(at: CGPoint(x: middle, y: (CGFloat(row) + 0.5) * pitch)),
+                               with: .color(.primary.opacity(0.1)), lineWidth: 1)
+            }
+            for grain in 0..<Self.grains {
+                for place in places(of: grain, current: current, into: into, stretch: stretch,
+                                    mover: mover, pitch: pitch) where place.amount > 0 {
+                    let center = CGPoint(x: middle + place.x, y: (place.row + 0.5) * pitch)
+                    let color = dawn(at: min(1, max(0, 1 - Double(center.y / size.height))))
+                    context.fill(Self.dot(at: center), with: .color(color.opacity(0.5 * place.amount)))
                 }
             }
         }
     }
 
-    private static func center(of slot: (row: Int, column: Int), inTop: Bool, size: CGSize) -> CGPoint {
-        let count = rows[slot.row]
-        let x = size.width / 2 + (CGFloat(slot.column) - CGFloat(count - 1) / 2) * pitch
-        // The widest row sits furthest from the neck, in both heaps.
-        let fromNeck = neck / 2 + rise / 2 + CGFloat(rows.count - 1 - slot.row) * rise
-        return CGPoint(x: x, y: size.height / 2 + (inTop ? -fromNeck : fromNeck))
+    /// Where a grain is drawn: a sideways offset in points, a row (0 at the top, with fractions in between),
+    /// and how strongly. A grain fading across under Reduce Motion is drawn in two places at once.
+    private func places(of grain: Int, current: Int, into: Double, stretch: Double, mover: Fall?,
+                        pitch: CGFloat) -> [(x: CGFloat, row: CGFloat, amount: Double)] {
+        let neck = CGFloat(Self.grains - 1)  // the lowest place in the top half, where grains let go
+        let pile = CGFloat(Self.grains * 2 - 1 - grain)  // where this grain comes to rest
+        if grain < current { return [(x: 0, row: pile, amount: 1)] }
+        guard let mover else {
+            let moved = grain == current ? into / stretch : 0
+            return [(x: 0, row: CGFloat(grain), amount: 1 - moved), (x: 0, row: pile, amount: moved)]
+        }
+        if grain == current {
+            let at = mover.position(at: into)
+            return [(x: at.x, row: neck + at.fallen - at.lift / pitch, amount: 1)]
+        }
+        // Still in the top half, stacked down to the neck. They slide down a place each time the one below lets go.
+        return [(x: 0, row: neck - CGFloat(grain - current) + mover.settled(at: into), amount: 1)]
+    }
+
+    private static func dot(at center: CGPoint) -> Path {
+        Path(ellipseIn: CGRect(x: center.x - diameter / 2, y: center.y - diameter / 2,
+                               width: diameter, height: diameter))
+    }
+}
+
+/// One grain's trip down the margin. Each grain has its own: when it lets go, how long it takes,
+/// how its speed comes and goes, how it sways, and how high it bounces when it lands.
+private struct Fall {
+    let distance: CGFloat  // rows from the neck to its place on the pile
+    let start: Double      // seconds into the stretch when it lets go
+    let end: Double        // seconds into the stretch when it lands
+    let bounceTime: Double
+    let settleStart: Double  // when it has cleared the neck, so the grains above can follow
+    let settleTime: Double
+    let sway: CGFloat, swayTurns: Double, swayPhase: Double
+    let wobble: Double, wobblePhase: Double
+    let bounce: CGFloat  // points
+
+    init(grain: Int, stretch: Double, distance: CGFloat) {
+        self.distance = distance
+        bounceTime = min(1.4, stretch * 0.1)
+        settleTime = min(2.5, stretch * 0.1)
+        // Longer drops take longer, give or take, and each one waits a different while before letting go.
+        let room = stretch - bounceTime
+        let length = min(room, room * (0.35 + 0.05 * Double(distance)) * (0.85 + 0.3 * noise(grain, 1)))
+        start = (room - length) * noise(grain, 2)
+        end = start + length
+        sway = 1.5 + 2 * CGFloat(noise(grain, 3))
+        swayTurns = 1 + 1.5 * noise(grain, 4)
+        swayPhase = noise(grain, 5)
+        wobble = 0.07 * noise(grain, 6)
+        wobblePhase = noise(grain, 7) * 2 * .pi
+        bounce = 4 + 4 * CGFloat(noise(grain, 8))
+        var q = 0.0
+        while q < 1, Self.drop(q, wobble: wobble, phase: wobblePhase) * Double(distance) < 1 { q += 0.01 }
+        // Finished before the next grain lets go, so nothing jumps between stretches.
+        settleStart = min(start + q * length, stretch - settleTime)
+    }
+
+    /// How far down the drop it is, 0...1, a share `q` of the way through. Slow to start and quicker at the
+    /// end, like something falling, with a little give and take in the speed. Always moving downward.
+    private static func drop(_ q: Double, wobble: Double, phase: Double) -> Double {
+        0.6 * q * q + 0.4 * q + wobble * sin(4 * .pi * q + phase) * q * (1 - q)
+    }
+
+    /// Sideways offset and bounce height in points, and rows fallen, `t` seconds into the stretch.
+    func position(at t: Double) -> (x: CGFloat, fallen: CGFloat, lift: CGFloat) {
+        if t <= start { return (x: 0, fallen: 0, lift: 0) }
+        if t < end {
+            let q = (t - start) / (end - start)
+            let x = sway * CGFloat(sin(2 * .pi * (q * swayTurns + swayPhase)) * sin(.pi * q))
+            return (x: x, fallen: distance * CGFloat(Self.drop(q, wobble: wobble, phase: wobblePhase)), lift: 0)
+        }
+        // Two and a half small hops, each lower than the last.
+        let τ = min(1, (t - end) / bounceTime)
+        return (x: 0, fallen: distance, lift: bounce * CGFloat(abs(sin(2.5 * .pi * τ)) * (1 - τ) * (1 - τ)))
+    }
+
+    /// How far the grains above have slid down after it, 0...1.
+    func settled(at t: Double) -> CGFloat {
+        let s = min(1, max(0, (t - settleStart) / settleTime))
+        return CGFloat(s * s * (3 - 2 * s))
     }
 }
 
@@ -393,7 +481,7 @@ private struct HelpCard: View {
                 .font(.system(size: 20, design: .serif))
             VStack(alignment: .leading, spacing: 8) {
                 point("Write until you reach \(session.wordGoal.formatted()) words or spend \(Prefs.minuteGoal) minutes on the page, whichever comes first.")
-                point("Bands of warm colour build up in the left margin as you write. On the right, dots run through an hourglass as the minutes pass. Each side is full at its goal.")
+                point("Bands of warm colour build up in the left margin as you write. On the right, grains of sand fall down the margin as the minutes pass. Each side is full at its goal.")
                 point("While you write, the page fills the screen and the Dock, menu bar and Cmd-Tab are switched off.")
                 point("Esc steps out and pauses the timer. ⇧⌘L locks you back in. The timer only runs while the page is full screen and Good Morning is in front.")
                 point("Reaching a goal plays a chime, counts the day toward your streak, and gives back the Dock and Cmd-Tab.")
