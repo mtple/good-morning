@@ -270,10 +270,13 @@ final class Session {
         }
     }
 
-    /// ⌘S. Autosave already runs every few seconds; this saves now and shows that it did.
+    /// ⌘S. Writes the page now, even with nothing new, so "Saved" only shows once it's really on disk: a file deleted
+    /// outside since the last save is written again, and one changed outside is kept beside it first, as on any save.
+    /// Not while the page couldn't be read, so nothing here goes over it.
     func saveNow() {
-        let wasDirty = textDirty
-        if save(), !wasDirty { pageSaves += 1 }  // nothing new to write, but it's all on disk, so say so
+        guard loadError == nil else { return }
+        textDirty = true
+        save()
     }
 
     /// Autosave runs every few seconds, on switching away, and on quit. True when the page is safely on disk
@@ -291,10 +294,13 @@ final class Session {
             do {
                 try keepOtherVersion()
                 try store.write(text, for: day)
-                if !(text.isEmpty && onDisk == nil) { onDisk = text }  // an empty page with no file stays without one
+                // An empty page with no file stays without one, and there's nothing to say "Saved" about.
+                if !(text.isEmpty && onDisk == nil) {
+                    onDisk = text
+                    pageSaves += 1
+                }
                 textDirty = false
                 pageProblem = nil
-                pageSaves += 1
             } catch {
                 pageIsSafe = false
                 saveFailure = error.localizedDescription
