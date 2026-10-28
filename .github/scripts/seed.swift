@@ -1,4 +1,5 @@
-// Points the app at a pages folder with a long page in it, as if you'd chosen the folder on first launch.
+// Makes a pages folder with a long page in it for today, and raises the word goal so that page doesn't meet it.
+// The folder itself is chosen through the app's own picker (smoke.sh), since a folder bookmark only works for the app that made it.
 // Run on the CI Mac before the smoke run (see smoke.sh).
 import Foundation
 
@@ -13,14 +14,6 @@ let page = (1...40).map { "Paragraph \($0). " + String(repeating: sentence, coun
 try page.write(to: folder.appending(path: "\(today).md"), atomically: true, encoding: .utf8)
 
 let defaults = UserDefaults(suiteName: "com.mtple.GoodMorning")!
-do {
-    let bookmark = try folder.bookmarkData(options: .withSecurityScope, includingResourceValuesForKeys: nil, relativeTo: nil)
-    defaults.set(bookmark, forKey: "journalFolderBookmark")
-    print("seeded a security-scoped bookmark")
-} catch {
-    print("security-scoped bookmark failed (\(error)), using a plain one")
-    defaults.set(try folder.bookmarkData(), forKey: "journalFolderBookmark")
-}
 defaults.set(2000, forKey: "wordGoal")  // so the goal isn't met by the seeded page
 defaults.synchronize()
 print("page words:", page.split(whereSeparator: \.isWhitespace).count)

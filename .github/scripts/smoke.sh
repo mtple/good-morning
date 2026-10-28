@@ -12,8 +12,18 @@ combo() { osascript -e "tell application \"System Events\" to keystroke \"$1\" u
 
 swift .github/scripts/seed.swift "$HOME/Pages"
 defaults read com.mtple.GoodMorning | grep -v journalFolderBookmark | head -20
-# Started directly rather than with open, so whatever it logs ends up in app.log.
-"$APP/Contents/MacOS/GoodMorning" > app.log 2>&1 &
+open --stdout app.log --stderr app.log "$APP"
+shot first-launch 4
+# Choose a Folder… is the default button. In the picker, ⇧⌘G takes a path.
+key 36
+sleep 2
+osascript -e 'tell application "System Events" to keystroke "g" using {command down, shift down}' || echo "go-to-folder failed"
+sleep 1
+keys "$HOME/Pages"
+key 36
+sleep 1.5
+shot folder-picker 0.5
+key 36
 shot launched-locked 5
 keys "Typing a new line at the end to see where the caret settles. "
 key 36; key 36
