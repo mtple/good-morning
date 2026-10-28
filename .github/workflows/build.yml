@@ -1,0 +1,54 @@
+# Builds the app on a Mac for every push, so a change that doesn't compile shows up before anyone opens Xcode,
+# then launches it, types into it and saves screenshots of each step (the "screenshots" artifact).
+# Built unsigned, so without the sandbox: smoke.sh can then point it at a pages folder through its defaults.
+name: Build
+
+# Only when the app or this workflow changes, not for README edits.
+on:
+  push:
+    paths: [GoodMorning/**, GoodMorning.xcodeproj/**, .github/**]
+  pull_request:
+    paths: [GoodMorning/**, GoodMorning.xcodeproj/**, .github/**]
+  workflow_dispatch:
+
+permissions:
+  contents: write  # for the ci-screenshots branch
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Show Xcode
+        run: xcodebuild -version
+      - name: Build
+        run: |
+          set -o pipefail
+          xcodebuild -project GoodMorning.xcodeproj -target GoodMorning -configuration Debug \
+            SYMROOT="$PWD/build" CODE_SIGNING_ALLOWED=NO build 2>&1 | tee build.log | grep -E "error:|warning:|BUILD" || true
+          grep -q "BUILD SUCCEEDED" build.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: build-log
+          path: build.log
+      - name: Smoke run
+        continue-on-error: true
+        timeout-minutes: 6
+        run: .github/scripts/smoke.sh build/Debug/GoodMorning.app
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screenshots
+          path: shots
+      # Also on a branch of their own, overwritten each run, for anyone who can fetch from the repo but not open artifacts.
+      - name: Publish screenshots to the ci-screenshots branch
+        if: always() && github.event_name != 'pull_request'
+        continue-on-error: true
+        working-directory: shots
+        run: |
+          sips -Z 1600 *.png > /dev/null
+          git init -q && git checkout -q -b ci-screenshots && git add .
+          git -c user.name="GitHub Actions" -c user.email="actions@github.com" commit -qm "Screenshots from run $GITHUB_RUN_ID of $GITHUB_SHA"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" ci-screenshots
