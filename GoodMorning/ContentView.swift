@@ -287,7 +287,8 @@ private struct WordBands: View {
 }
 
 /// The time as sand: thirty solid grains in a column three wide, one for each thirtieth of the goal,
-/// starting in the top half. Drawn from `Sandglass`, which works out where every grain is.
+/// filling the top half to start. A bar across the middle lets them through only on the right.
+/// Drawn from `Sandglass`, which works out where every grain is.
 private struct SandColumn: View {
     let elapsed: Double  // seconds on the page today
     let goal: Double     // seconds in the time goal
@@ -296,23 +297,36 @@ private struct SandColumn: View {
     static let diameter: CGFloat = 14
     static let across: CGFloat = 19  // centre to centre, side to side
     static let width = across * 2 + diameter
+    private static let barGap: CGFloat = 10  // the space the bar sits in, between the two halves
+    private static let barThickness: CGFloat = 4
 
     var body: some View {
         Canvas { context, size in
-            let pitch = size.height / CGFloat(Sandglass.depth * 2)
-            func dot(_ column: CGFloat, _ row: CGFloat) -> Path {
-                let x = size.width / 2 + (column - 1) * Self.across, y = (row + 0.5) * pitch
-                return Path(ellipseIn: CGRect(x: x - Self.diameter / 2, y: y - Self.diameter / 2,
-                                              width: Self.diameter, height: Self.diameter))
+            let rows = Sandglass.depth * 2
+            let pitch = (size.height - Self.barGap) / CGFloat(rows)
+            func x(_ column: CGFloat) -> CGFloat { size.width / 2 + (column - 1) * Self.across }
+            func y(_ row: CGFloat) -> CGFloat {
+                // Rows below the bar sit lower by its gap, and a grain passing the bar crosses it smoothly.
+                (row + 0.5) * pitch + Self.barGap * min(1, max(0, row - CGFloat(Sandglass.depth - 1)))
             }
-            for row in 0..<Sandglass.depth * 2 {
+            func dot(_ column: CGFloat, _ row: CGFloat) -> Path {
+                Path(ellipseIn: CGRect(x: x(column) - Self.diameter / 2, y: y(row) - Self.diameter / 2,
+                                       width: Self.diameter, height: Self.diameter))
+            }
+            for row in 0..<rows {
                 for column in 0..<3 {
                     context.stroke(dot(CGFloat(column), CGFloat(row)), with: .color(.primary.opacity(0.1)), lineWidth: 1)
                 }
             }
+            // The bar: across the left and middle columns, open over the right.
+            let left = x(0) - Self.diameter / 2 - 3, right = x(1) + Self.diameter / 2
+            let bar = CGRect(x: left, y: CGFloat(Sandglass.depth) * pitch + (Self.barGap - Self.barThickness) / 2,
+                             width: right - left, height: Self.barThickness)
+            context.fill(Path(roundedRect: bar, cornerRadius: Self.barThickness / 2), with: .color(.primary.opacity(0.32)))
+
             for place in Sandglass.places(elapsed: elapsed, goal: goal, pitch: pitch, calm: reduceMotion)
             where place.amount > 0 {
-                let height = 1 - Double((place.row + 0.5) * pitch / size.height)
+                let height = 1 - Double(y(place.row) / size.height)
                 context.fill(dot(place.column, place.row),
                              with: .color(dawn(at: min(1, max(0, height))).opacity(place.amount)))
             }
@@ -321,16 +335,18 @@ private struct SandColumn: View {
 }
 
 /// Where the sand is at any moment. Columns are 0 (left), 1 (middle) and 2 (right). Rows run from 0 at
-/// the top; the top half is rows 0 to 9, with the neck at 9, and the bottom half rows 10 to 19.
+/// the top; the top half is rows 0 to 9, with the neck at 9, and the bottom half rows 10 to 19. A bar
+/// between the halves covers the left and middle columns, so grains get through only on the right.
 ///
-/// In each stretch the lowest middle grain drops through the neck under gravity, bounces off the pile with
-/// most of its speed lost, and rolls off to a lower side if there is one, so the pile builds into a mound.
-/// The middle column above it drops a place, and a side two grains higher slides its top grain into the
-/// dip, so the top drains from the middle as real sand does. Each grain lets go at its own moment.
-/// With Reduce Motion on, nothing moves: grains fade from the top half to the bottom instead.
+/// In each stretch the lowest grain over the opening drops through under gravity, bounces off the pile with
+/// most of its speed lost, and rolls left while there's a lower column further left. The column above the
+/// opening drops a place, and grains slide toward it to keep the top level. So both heaps stay nearly
+/// level, never more than a grain apart, with a slight slope toward the opening. Each grain lets go at its
+/// own moment. With Reduce Motion on, nothing moves: grains fade from the top half to the bottom instead.
 private enum Sandglass {
     static let grains = 30
     static let depth = 10  // rows in each half
+    static let opening = 2  // the column the bar is open over
     static let gravity = 2400.0  // points per second squared
     static let restitution = 0.3  // how much of its speed a grain keeps on each bounce
     static let rollTime = 0.3
@@ -390,49 +406,55 @@ private enum Sandglass {
         let neck = CGFloat(depth - 1), floor = CGFloat(depth * 2 - 1)
         func topRow(_ column: Int) -> CGFloat { neck - CGFloat(top[column]) + 1 }  // its highest grain
         var moves: [[Leg]] = []
-        let busy = 2.2  // the longest a trip takes, give or take
+        let busy = 2.6  // the longest a trip takes, give or take
         var t = stretch > busy ? (stretch - busy) * (0.05 + 0.9 * noise(k, 2)) : 0
 
-        // The middle has run dry: a grain from a side rolls in over the neck first, then drops through it.
+        // The opening has run dry: the nearest grain rolls along the bar to it first, then drops through.
         var legs: [Leg] = []
-        if top[1] == 0 {
-            let side = taller(top[0], top[2], k, 3)
-            legs.append(roll(from: Place(column: CGFloat(side), row: topRow(side)), to: Place(column: 1, row: neck),
-                             at: t, for: slideTime))
-            top[side] -= 1
-            top[1] = 1
-            t += slideTime
+        if top[opening] == 0 {
+            let column = top[1] > 0 ? 1 : 0
+            let time = slideTime * Double(opening - column)
+            legs.append(roll(from: Place(column: CGFloat(column), row: topRow(column)),
+                             to: Place(column: CGFloat(opening), row: neck), at: t, for: time))
+            top[column] -= 1
+            top[opening] = 1
+            t += time
         }
-        // The lowest middle grain drops through the neck, and rolls off the pile's peak if a side is lower.
-        top[1] -= 1
-        let land = floor - CGFloat(bottom[1])
-        let drop = fall(column: 1, from: neck, to: land, at: t, pitch: pitch)
+        // The lowest grain over the opening drops through, lands on the right of the pile, and rolls left while
+        // there's a lower column further left, so the pile stays nearly level with only a slight slope.
+        top[opening] -= 1
+        let land = floor - CGFloat(bottom[opening])
+        let drop = fall(column: CGFloat(opening), from: neck, to: land, at: t, pitch: pitch)
         legs.append(drop)
-        if bottom[1] > min(bottom[0], bottom[2]) {
-            let side = lower(bottom[0], bottom[2], k, 4)
-            legs.append(roll(from: Place(column: 1, row: land), to: Place(column: CGFloat(side), row: floor - CGFloat(bottom[side])),
-                             at: drop.end, for: rollTime))
-            bottom[side] += 1
-        } else {
-            bottom[1] += 1
+        var at = opening, end = drop.end
+        while at > 0, bottom[at] > bottom[..<at].min()! {
+            let leg = roll(from: Place(column: CGFloat(at), row: floor - CGFloat(bottom[at])),
+                           to: Place(column: CGFloat(at - 1), row: floor - CGFloat(bottom[at - 1])), at: end, for: rollTime)
+            legs.append(leg)
+            end = leg.end
+            at -= 1
         }
+        bottom[at] += 1
         moves.append(legs)
 
-        // The middle column above drops a place after it.
+        // The column over the opening drops a place after it.
         var settled = t
-        for i in 0..<top[1] {
-            let leg = fall(column: 1, from: neck - CGFloat(i) - 1, to: neck - CGFloat(i), at: t, pitch: pitch)
+        for i in 0..<top[opening] {
+            let leg = fall(column: CGFloat(opening), from: neck - CGFloat(i) - 1, to: neck - CGFloat(i), at: t, pitch: pitch)
             moves.append([leg])
             settled = max(settled, leg.end)
         }
-        // A side two higher than the middle lets its top grain slide down into the dip.
-        if max(top[0], top[2]) - top[1] >= 2 {
-            let side = taller(top[0], top[2], k, 5)
-            moves.append([roll(from: Place(column: CGFloat(side), row: topRow(side)),
-                               to: Place(column: 1, row: neck - CGFloat(top[1])), at: settled + 0.05, for: slideTime)])
-            top[side] -= 1
-            top[1] += 1
+        // Grains slide toward the opening to keep the top nearly level: no column more than one below another.
+        func slide(from column: Int) {
+            moves.append([roll(from: Place(column: CGFloat(column), row: topRow(column)),
+                               to: Place(column: CGFloat(column + 1), row: neck - CGFloat(top[column + 1])),
+                               at: settled + 0.05, for: slideTime)])
+            top[column] -= 1
+            top[column + 1] += 1
+            settled += 0.05 + slideTime
         }
+        if top[opening] < max(top[0], top[1]) - 1 { slide(from: 1) }
+        if top[1] < top[0] - 1 { slide(from: 0) }
         return moves
     }
 
@@ -477,19 +499,10 @@ private enum Sandglass {
         return legs[legs.count - 1].to
     }
 
-    /// The taller side (0 or 2), or either one at even, the same way every day.
-    private static func taller(_ left: Int, _ right: Int, _ k: Int, _ salt: Int) -> Int {
-        left > right ? 0 : right > left ? 2 : noise(k, salt) < 0.5 ? 0 : 2
-    }
-
-    private static func lower(_ left: Int, _ right: Int, _ k: Int, _ salt: Int) -> Int {
-        left < right ? 0 : right < left ? 2 : noise(k, salt) < 0.5 ? 0 : 2
-    }
-
-    /// Reduce Motion: the top empties from its surface and the pile fills from the floor, middle first,
-    /// each grain fading across over its stretch.
+    /// Reduce Motion: the top empties from its surface and the pile fills from the floor, nearest the opening
+    /// first, each grain fading across over its stretch.
     private static func calmPlaces(current: Int, moved: Double) -> [Place] {
-        let order = [1, 0, 2]
+        let order = [2, 1, 0]
         return (0..<grains).flatMap { (k: Int) -> [Place] in
             let column = CGFloat(order[k % 3]), row = CGFloat(k / 3)
             let gone: Double = k < current ? 1 : k == current ? moved : 0
@@ -568,7 +581,7 @@ private struct HelpCard: View {
                 .font(.system(size: 20, design: .serif))
             VStack(alignment: .leading, spacing: 8) {
                 point("Write until you reach \(session.wordGoal.formatted()) words or spend \(Prefs.minuteGoal) minutes on the page, whichever comes first.")
-                point("Bands of warm colour build up in the left margin as you write. On the right, grains of sand fall down the margin as the minutes pass. Each side is full at its goal.")
+                point("Bands of warm colour build up in the left margin as you write. On the right, sand drops through a gap in a bar as the minutes pass, until the top is empty and the bottom is full.")
                 point("While you write, the page fills the screen and the Dock, menu bar and Cmd-Tab are switched off.")
                 point("Esc steps out and pauses the timer. ⇧⌘L locks you back in. The timer only runs while the page is full screen and Good Morning is in front.")
                 point("Reaching a goal plays a chime, counts the day toward your streak, and gives back the Dock and Cmd-Tab.")
