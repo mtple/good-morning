@@ -3,14 +3,18 @@
 # Built unsigned, so without the sandbox: smoke.sh can then point it at a pages folder through its defaults.
 name: Build
 
+# Only when the app or this workflow changes, not for README edits.
 on:
   push:
+    paths: [GoodMorning/**, GoodMorning.xcodeproj/**, .github/**]
   pull_request:
+    paths: [GoodMorning/**, GoodMorning.xcodeproj/**, .github/**]
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: macos-15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - name: Show Xcode
@@ -28,6 +32,7 @@ jobs:
           path: build.log
       - name: Smoke run
         continue-on-error: true
+        timeout-minutes: 6
         run: .github/scripts/smoke.sh build/Debug/GoodMorning.app
       - uses: actions/upload-artifact@v4
         if: always()
