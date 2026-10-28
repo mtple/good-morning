@@ -12,6 +12,8 @@ combo() { osascript -e "tell application \"System Events\" to keystroke \"$1\" u
 
 swift .github/scripts/seed.swift "$HOME/Pages"
 defaults read com.mtple.GoodMorning | grep -v journalFolderBookmark | head -20
+# A two-minute time goal, so the sand in the right margin visibly runs during the smoke run.
+defaults write com.mtple.GoodMorning minuteGoal -int 2
 open --stdout app.log --stderr app.log "$APP"
 shot first-launch 4
 # Choose a Folder… is the default button. In the picker, ⇧⌘G takes a path.
@@ -50,6 +52,9 @@ shot not-locked-alert
 key 53
 combo "l" "command down"
 shot locked-again 2
+# The time goal is two minutes, so a grain drops every four seconds while locked in.
+shot sand-later 12
+shot sand-much-later 20
 # About 20 more words crosses the goal: the progress line glows and the word count lifts.
 keys "And now enough words to reach the goal, one after another, until the count goes past it and the page lets go."
 shot goal-reached 0.3
