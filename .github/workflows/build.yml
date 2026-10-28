@@ -11,6 +11,9 @@ on:
     paths: [GoodMorning/**, GoodMorning.xcodeproj/**, .github/**]
   workflow_dispatch:
 
+permissions:
+  contents: write  # for the ci-screenshots branch
+
 jobs:
   build:
     runs-on: macos-15
@@ -39,3 +42,13 @@ jobs:
         with:
           name: screenshots
           path: shots
+      # Also on a branch of their own, overwritten each run, for anyone who can fetch from the repo but not open artifacts.
+      - name: Publish screenshots to the ci-screenshots branch
+        if: always() && github.event_name != 'pull_request'
+        continue-on-error: true
+        working-directory: shots
+        run: |
+          sips -Z 1600 *.png > /dev/null
+          git init -q && git checkout -q -b ci-screenshots && git add .
+          git -c user.name="GitHub Actions" -c user.email="actions@github.com" commit -qm "Screenshots from run $GITHUB_RUN_ID of $GITHUB_SHA"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" ci-screenshots

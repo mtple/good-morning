@@ -7,11 +7,13 @@ mkdir -p shots
 step=0
 shot() { step=$((step + 1)); sleep "${2:-1.5}"; screencapture -x "shots/$(printf %02d $step)-$1.png" || echo "screencapture failed"; }
 keys() { osascript -e "tell application \"System Events\" to keystroke \"$1\"" || echo "keystroke failed: $1"; }
-key() { osascript -e "tell application \"System Events\" to key code $1 ${2:+using {$2}}" || echo "key code failed: $1"; }
+key() { osascript -e "tell application \"System Events\" to key code $1" || echo "key code failed: $1"; }
 combo() { osascript -e "tell application \"System Events\" to keystroke \"$1\" using {$2}" || echo "combo failed: $1"; }
 
 swift .github/scripts/seed.swift "$HOME/Pages"
-open "$APP"
+defaults read com.mtple.GoodMorning | grep -v journalFolderBookmark | head -20
+# Started directly rather than with open, so whatever it logs ends up in app.log.
+"$APP/Contents/MacOS/GoodMorning" > app.log 2>&1 &
 shot launched-locked 5
 keys "Typing a new line at the end to see where the caret settles. "
 key 36; key 36
@@ -39,4 +41,6 @@ key 53
 combo "l" "command down"
 shot locked-again 2
 ls shots
-cat "$HOME/Pages"/*.md | tail -c 400
+echo "--- pages folder"; ls -la "$HOME/Pages"
+echo "--- end of today's page"; cat "$HOME/Pages"/2*.md | tail -c 400; echo
+echo "--- app log"; tail -40 app.log
