@@ -12,6 +12,7 @@ No accounts and no network. Just a page, a timer and a streak.
 - **Lost?** The ? at the bottom right (or Cmd-?, or Help in the menu bar) opens a short card that explains all of this.
 - **A day counts** if you reach the word goal *or* spend the full time on the page. Time only counts while the page is full screen and Good Morning is the frontmost app, and not while the Mac sleeps, the screen is locked, or the display is asleep.
 - **When you reach the goal,** a chime plays and the lock relaxes. The Dock, menu bar and Cmd-Tab come back, and the page stays full screen until you press Esc. You can keep writing as long as you like.
+- **The margins track your progress.** Lines build up in the left margin as you write, one for every 30th of the word goal, and dots fill in on the right as the time passes. They are drawn faint and change a hair at a time, so they stay out of the way until you look. Hover over either for the numbers. They step aside when the window is too narrow to fit them.
 - **Your streak** counts consecutive days. Until today counts, the streak shown is the one through yesterday.
 - **Pages** are saved as `2026-10-23.md` in the folder you pick on first launch. File names are always ISO dates, and an open page keeps its file if the time zone changes. Autosave runs every 5 seconds, whenever you switch away, and on quit. A day with no writing gets no file.
 - **Editing today's page elsewhere** (in Obsidian, or through sync) is fine. If Good Morning has nothing unsaved, your change shows up in it within a few seconds. If both changed, Good Morning keeps its writing as today's page and saves the other version beside it, as `2026-10-23 other version 10.32.15.md`, and tells you. Nothing is written over.
@@ -55,7 +56,7 @@ Then press Cmd-R. `project.yml` already sets the deployment target, the sandbox 
 | `Lockdown.swift` | Hiding the Dock and menu bar, disabling Cmd-Tab, filling the screen and restoring the window |
 | `JournalStore.swift` | The folder bookmark, reading and writing daily files, the time log, and the streak calculation |
 | `EditorView.swift` | The plain-text editor (spellcheck and smart punctuation off), its empty-page hint, and its typography |
-| `ContentView.swift` | Layout, the status bar, the progress line, the first-launch screen, the unreadable-page message, and the help card |
+| `ContentView.swift` | Layout, the status bar, the progress line, the margin trackers, the first-launch screen, the unreadable-page message, and the help card |
 | `CommandPalette.swift` | The Cmd-P palette: every command in one place, searchable |
 | `SettingsView.swift` | Goals, folder, and open at login |
 | `Prefs.swift` | Defaults, dates and the word counter |

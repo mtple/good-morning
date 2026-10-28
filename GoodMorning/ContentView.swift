@@ -8,6 +8,10 @@ struct ContentView: View {
         ZStack {
             Color.paper.ignoresSafeArea()
 
+            if session.folderURL != nil, session.loadError == nil {
+                Margins(session: session)
+            }
+
             if session.folderURL != nil {
                 VStack(spacing: 0) {
                     ProgressLine(progress: session.progress)
@@ -181,6 +185,135 @@ private struct ProgressLine: View {
     }
 }
 
+// MARK: - Margins
+
+/// The empty space either side of the text, put to work: lines of writing pile up on the left as you
+/// write, and dots for the minutes fill in on the right. Faint, and still enough that nothing moves at
+/// the edge of your eye. Each mark changes by a hair at a time, never with a jump.
+private struct Margins: View {
+    let session: Session
+
+    var body: some View {
+        GeometryReader { geo in
+            let side = (geo.size.width - 680) / 2  // the text column is 680 wide, centered
+            if side >= 64 {
+                // Halfway out into the margin, but not so far that it leaves the page behind.
+                let inset = min(side / 2, 150)
+                let height = min(geo.size.height * 0.5, 420)
+                let y = geo.size.height / 2
+
+                WordMarks(progress: Double(session.wordCount) / Double(max(1, session.wordGoal)),
+                          isComplete: session.isComplete)
+                    .frame(width: 28, height: height)
+                    .help("\(session.wordCount.formatted()) of \(session.wordGoal.formatted()) words")
+                    .accessibilityElement()
+                    .accessibilityLabel("Words")
+                    .accessibilityValue("\(session.wordCount) of \(session.wordGoal)")
+                    .position(x: side - inset, y: y)
+
+                Group {
+                    if session.isTimerRunning {
+                        TimelineView(.periodic(from: .now, by: 1)) { _ in timeMarks }
+                    } else {
+                        timeMarks
+                    }
+                }
+                .frame(width: 28, height: height)
+                .help(minutesText)
+                .accessibilityElement()
+                .accessibilityLabel("Time")
+                .accessibilityValue(minutesText)
+                .position(x: geo.size.width - side + inset, y: y)
+            }
+        }
+        .ignoresSafeArea()
+    }
+
+    private var timeMarks: some View {
+        TimeMarks(progress: Double(session.elapsedNow) / Double(max(1, session.secondsGoal)),
+                  isComplete: session.isComplete)
+            // Paused: the dots stay where they are, just quieter.
+            .opacity(session.isTimerRunning || session.isComplete ? 1 : 0.5)
+    }
+
+    private var minutesText: String {
+        "\(session.elapsedNow / 60) of \(Prefs.minuteGoal) minutes"
+    }
+}
+
+/// How many marks make up a goal, whatever the goal is.
+private let marksPerGoal = 30
+
+/// How full mark `index` is, 0...1, when the marks fill from the first one up.
+private func fill(of index: Int, progress: Double) -> Double {
+    min(1, max(0, progress * Double(marksPerGoal) - Double(index)))
+}
+
+/// Short strokes stacked from the bottom, ragged on the right like lines of text.
+/// Each one draws itself left to right as you write the words it stands for.
+private struct WordMarks: View {
+    let progress: Double
+    let isComplete: Bool
+
+    var body: some View {
+        Canvas { context, size in
+            let step = size.height / CGFloat(marksPerGoal)
+            let ink: Color = isComplete ? .accentColor.opacity(0.5) : .primary.opacity(0.26)
+            let style = StrokeStyle(lineWidth: 1.5, lineCap: .round)
+            for i in 0..<marksPerGoal {
+                let y = size.height - (CGFloat(i) + 0.5) * step
+                let length = size.width * Self.length(of: i)
+                context.stroke(line(at: y, length: length), with: .color(.primary.opacity(0.07)), style: style)
+                let done = fill(of: i, progress: progress)
+                if done > 0 {
+                    context.stroke(line(at: y, length: length * done), with: .color(ink), style: style)
+                }
+            }
+        }
+    }
+
+    private func line(at y: CGFloat, length: CGFloat) -> Path {
+        Path { path in
+            path.move(to: CGPoint(x: 0, y: y))
+            path.addLine(to: CGPoint(x: length, y: y))
+        }
+    }
+
+    /// The same ragged edge every day, with a short line now and then where a paragraph ends.
+    private static func length(of index: Int) -> CGFloat {
+        if index % 7 == 6 { return 0.35 }
+        let noise = sin(Double(index) * 12.9898) * 43758.5453
+        return 0.6 + 0.4 * CGFloat(noise - noise.rounded(.down))
+    }
+}
+
+/// A column of dots, one for each stretch of the time, filling from the bottom.
+/// The current dot grows from a speck to full size over its stretch.
+private struct TimeMarks: View {
+    let progress: Double
+    let isComplete: Bool
+
+    var body: some View {
+        Canvas { context, size in
+            let step = size.height / CGFloat(marksPerGoal)
+            let ink: Color = isComplete ? .accentColor.opacity(0.5) : .primary.opacity(0.26)
+            for i in 0..<marksPerGoal {
+                let center = CGPoint(x: size.width / 2, y: size.height - (CGFloat(i) + 0.5) * step)
+                context.fill(dot(at: center, diameter: 3), with: .color(.primary.opacity(0.08)))
+                let done = fill(of: i, progress: progress)
+                if done > 0 {
+                    context.fill(dot(at: center, diameter: 1 + 3.5 * done), with: .color(ink))
+                }
+            }
+        }
+    }
+
+    private func dot(at center: CGPoint, diameter: CGFloat) -> Path {
+        Path(ellipseIn: CGRect(x: center.x - diameter / 2, y: center.y - diameter / 2,
+                               width: diameter, height: diameter))
+    }
+}
+
 // MARK: - First launch
 
 private struct Welcome: View {
@@ -250,6 +383,7 @@ private struct HelpCard: View {
                 .font(.system(size: 20, design: .serif))
             VStack(alignment: .leading, spacing: 8) {
                 point("Write until you reach \(session.wordGoal.formatted()) words or spend \(Prefs.minuteGoal) minutes on the page, whichever comes first.")
+                point("Lines build up in the left margin as you write, and dots fill in on the right as the minutes pass. Each column is full at its goal.")
                 point("While you write, the page fills the screen and the Dock, menu bar and Cmd-Tab are switched off.")
                 point("Esc steps out and pauses the timer. ⇧⌘L locks you back in. The timer only runs while the page is full screen and Good Morning is in front.")
                 point("Reaching a goal plays a chime, counts the day toward your streak, and gives back the Dock and Cmd-Tab.")
