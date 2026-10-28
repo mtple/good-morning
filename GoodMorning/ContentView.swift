@@ -187,24 +187,23 @@ private struct ProgressLine: View {
 
 // MARK: - Margins
 
-/// The empty space either side of the text, put to work: lines of writing pile up on the left as you
-/// write, and dots for the minutes fill in on the right. Faint, and still enough that nothing moves at
-/// the edge of your eye. Each mark changes by a hair at a time, never with a jump.
+/// The empty space either side of the text, put to work: bands of morning colour stack up on the left as
+/// you write, and on the right the minutes run through an hourglass of dots. Soft, and still enough that
+/// nothing moves at the edge of your eye. Each mark fades in or out slowly, never with a jump.
 private struct Margins: View {
     let session: Session
 
     var body: some View {
         GeometryReader { geo in
             let side = (geo.size.width - 680) / 2  // the text column is 680 wide, centered
-            if side >= 64 {
+            if side >= 140 {
                 // Halfway out into the margin, but not so far that it leaves the page behind.
                 let inset = min(side / 2, 150)
                 let height = min(geo.size.height * 0.5, 420)
                 let y = geo.size.height / 2
 
-                WordMarks(progress: Double(session.wordCount) / Double(max(1, session.wordGoal)),
-                          isComplete: session.isComplete)
-                    .frame(width: 28, height: height)
+                WordBands(progress: Double(session.wordCount) / Double(max(1, session.wordGoal)))
+                    .frame(width: 56, height: height)
                     .help("\(session.wordCount.formatted()) of \(session.wordGoal.formatted()) words")
                     .accessibilityElement()
                     .accessibilityLabel("Words")
@@ -213,12 +212,12 @@ private struct Margins: View {
 
                 Group {
                     if session.isTimerRunning {
-                        TimelineView(.periodic(from: .now, by: 1)) { _ in timeMarks }
+                        TimelineView(.periodic(from: .now, by: 1)) { _ in hourglass }
                     } else {
-                        timeMarks
+                        hourglass
                     }
                 }
-                .frame(width: 28, height: height)
+                .frame(width: Hourglass.size.width, height: Hourglass.size.height)
                 .help(minutesText)
                 .accessibilityElement()
                 .accessibilityLabel("Time")
@@ -229,9 +228,8 @@ private struct Margins: View {
         .ignoresSafeArea()
     }
 
-    private var timeMarks: some View {
-        TimeMarks(progress: Double(session.elapsedNow) / Double(max(1, session.secondsGoal)),
-                  isComplete: session.isComplete)
+    private var hourglass: some View {
+        Hourglass(progress: Double(session.elapsedNow) / Double(max(1, session.secondsGoal)))
             // Paused: the dots stay where they are, just quieter.
             .opacity(session.isTimerRunning || session.isComplete ? 1 : 0.5)
     }
@@ -241,76 +239,88 @@ private struct Margins: View {
     }
 }
 
-/// How many marks make up a goal, whatever the goal is.
-private let marksPerGoal = 30
-
-/// How full mark `index` is, 0...1, when the marks fill from the first one up.
-private func fill(of index: Int, progress: Double) -> Double {
-    min(1, max(0, progress * Double(marksPerGoal) - Double(index)))
+/// How full mark `index` of `count` is, 0...1, when the marks fill one after another.
+private func fill(of index: Int, in count: Int, progress: Double) -> Double {
+    min(1, max(0, progress * Double(count) - Double(index)))
 }
 
-/// Short strokes stacked from the bottom, ragged on the right like lines of text.
-/// Each one draws itself left to right as you write the words it stands for.
-private struct WordMarks: View {
+/// Deep orange at the bottom of a margin to pale gold at the top (`height` 0...1), like the sky at dawn.
+private func dawn(at height: Double) -> Color {
+    let low = (0.78, 0.45, 0.30), high = (0.92, 0.82, 0.72)
+    return Color(red: low.0 + (high.0 - low.0) * height,
+                 green: low.1 + (high.1 - low.1) * height,
+                 blue: low.2 + (high.2 - low.2) * height)
+}
+
+/// Ten bands stacked from the bottom, each a tenth of the word goal.
+/// A band warms in slowly as you write the words it stands for.
+private struct WordBands: View {
     let progress: Double
-    let isComplete: Bool
+
+    private let bands = 10
 
     var body: some View {
         Canvas { context, size in
-            let step = size.height / CGFloat(marksPerGoal)
-            let ink: Color = isComplete ? .accentColor.opacity(0.5) : .primary.opacity(0.26)
-            let style = StrokeStyle(lineWidth: 1.5, lineCap: .round)
-            for i in 0..<marksPerGoal {
-                let y = size.height - (CGFloat(i) + 0.5) * step
-                let length = size.width * Self.length(of: i)
-                context.stroke(line(at: y, length: length), with: .color(.primary.opacity(0.07)), style: style)
-                let done = fill(of: i, progress: progress)
+            let step = size.height / CGFloat(bands)
+            for i in 0..<bands {
+                let band = Path(CGRect(x: 0, y: size.height - CGFloat(i + 1) * step + 2.5,
+                                       width: size.width, height: step - 5))
+                context.fill(band, with: .color(.primary.opacity(0.04)))
+                let done = fill(of: i, in: bands, progress: progress)
                 if done > 0 {
-                    context.stroke(line(at: y, length: length * done), with: .color(ink), style: style)
+                    context.fill(band, with: .color(dawn(at: Double(i) / Double(bands - 1)).opacity(0.45 * done)))
+                }
+            }
+        }
+    }
+}
+
+/// The time as an hourglass of ten dots, each a tenth of the goal. Dots leave the top heap from its
+/// surface down and settle into the bottom heap from the floor up, each one fading out above and in
+/// below over its stretch. The empty places stay as faint rings, so the hourglass keeps its shape.
+private struct Hourglass: View {
+    let progress: Double
+
+    private static let rows = [4, 3, 2, 1]  // each heap, widest row first: the top's surface, the bottom's floor
+    private static let pitch: CGFloat = 28  // dot to dot along a row
+    private static let rise = pitch * 0.866  // row to row, so the dots pack like stacked balls
+    private static let neck: CGFloat = 14
+    private static let diameter: CGFloat = 20
+
+    static let size = CGSize(width: pitch * 4, height: rise * 7 + neck + diameter)
+
+    /// Every place in a heap, in the order the dots go: widest row first, from the middle out.
+    private static let slots: [(row: Int, column: Int)] = rows.indices.flatMap { (row: Int) -> [(row: Int, column: Int)] in
+        let middle = Double(rows[row] - 1) / 2
+        return (0..<rows[row])
+            .sorted { (abs(Double($0) - middle), $0) < (abs(Double($1) - middle), $1) }
+            .map { (row: row, column: $0) }
+    }
+
+    var body: some View {
+        Canvas { context, size in
+            for (k, slot) in Self.slots.enumerated() {
+                let moved = fill(of: k, in: Self.slots.count, progress: progress)
+                for (center, amount) in [(Self.center(of: slot, inTop: true, size: size), 1 - moved),
+                                         (Self.center(of: slot, inTop: false, size: size), moved)] {
+                    let dot = Path(ellipseIn: CGRect(x: center.x - Self.diameter / 2, y: center.y - Self.diameter / 2,
+                                                     width: Self.diameter, height: Self.diameter))
+                    context.stroke(dot, with: .color(.primary.opacity(0.1)), lineWidth: 1)
+                    if amount > 0 {
+                        let color = dawn(at: 1 - Double(center.y / size.height))
+                        context.fill(dot, with: .color(color.opacity(0.5 * amount)))
+                    }
                 }
             }
         }
     }
 
-    private func line(at y: CGFloat, length: CGFloat) -> Path {
-        Path { path in
-            path.move(to: CGPoint(x: 0, y: y))
-            path.addLine(to: CGPoint(x: length, y: y))
-        }
-    }
-
-    /// The same ragged edge every day, with a short line now and then where a paragraph ends.
-    private static func length(of index: Int) -> CGFloat {
-        if index % 7 == 6 { return 0.35 }
-        let noise = sin(Double(index) * 12.9898) * 43758.5453
-        return 0.6 + 0.4 * CGFloat(noise - noise.rounded(.down))
-    }
-}
-
-/// A column of dots, one for each stretch of the time, filling from the bottom.
-/// The current dot grows from a speck to full size over its stretch.
-private struct TimeMarks: View {
-    let progress: Double
-    let isComplete: Bool
-
-    var body: some View {
-        Canvas { context, size in
-            let step = size.height / CGFloat(marksPerGoal)
-            let ink: Color = isComplete ? .accentColor.opacity(0.5) : .primary.opacity(0.26)
-            for i in 0..<marksPerGoal {
-                let center = CGPoint(x: size.width / 2, y: size.height - (CGFloat(i) + 0.5) * step)
-                context.fill(dot(at: center, diameter: 3), with: .color(.primary.opacity(0.08)))
-                let done = fill(of: i, progress: progress)
-                if done > 0 {
-                    context.fill(dot(at: center, diameter: 1 + 3.5 * done), with: .color(ink))
-                }
-            }
-        }
-    }
-
-    private func dot(at center: CGPoint, diameter: CGFloat) -> Path {
-        Path(ellipseIn: CGRect(x: center.x - diameter / 2, y: center.y - diameter / 2,
-                               width: diameter, height: diameter))
+    private static func center(of slot: (row: Int, column: Int), inTop: Bool, size: CGSize) -> CGPoint {
+        let count = rows[slot.row]
+        let x = size.width / 2 + (CGFloat(slot.column) - CGFloat(count - 1) / 2) * pitch
+        // The widest row sits furthest from the neck, in both heaps.
+        let fromNeck = neck / 2 + rise / 2 + CGFloat(rows.count - 1 - slot.row) * rise
+        return CGPoint(x: x, y: size.height / 2 + (inTop ? -fromNeck : fromNeck))
     }
 }
 
@@ -383,7 +393,7 @@ private struct HelpCard: View {
                 .font(.system(size: 20, design: .serif))
             VStack(alignment: .leading, spacing: 8) {
                 point("Write until you reach \(session.wordGoal.formatted()) words or spend \(Prefs.minuteGoal) minutes on the page, whichever comes first.")
-                point("Lines build up in the left margin as you write, and dots fill in on the right as the minutes pass. Each column is full at its goal.")
+                point("Bands of warm colour build up in the left margin as you write. On the right, dots run through an hourglass as the minutes pass. Each side is full at its goal.")
                 point("While you write, the page fills the screen and the Dock, menu bar and Cmd-Tab are switched off.")
                 point("Esc steps out and pauses the timer. ⇧⌘L locks you back in. The timer only runs while the page is full screen and Good Morning is in front.")
                 point("Reaching a goal plays a chime, counts the day toward your streak, and gives back the Dock and Cmd-Tab.")
