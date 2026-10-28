@@ -8,7 +8,7 @@ No accounts and no network. Just a page, a timer and a streak.
 
 - **Opening the app locks it.** The window fills the screen, the Dock and menu bar disappear, and Cmd-Tab and Cmd-H stop working.
 - **Esc gets you out.** One tap returns you to a normal window and pauses the timer. Cmd-L (or the "Lock in" link) locks you back in and starts it again, and Cmd-L also steps you out.
-- **Typing outside the lock** asks, the first time, whether you meant to lock in, since the timer isn't running.
+- **Typing outside the lock** brings up a small banner, the first time, saying the timer is paused, with a "Lock in" link. It doesn't interrupt your typing; Esc or its × closes it.
 - **Cmd-P shows every command:** dark or light mode, lock in, text size, line width, change folder, Settings. Arrow keys and Return pick one.
 - **Cmd-+ and Cmd-−** change the text size, and Cmd-0 puts it back. Line width is in Settings and the command palette.
 - **The page scrolls on past its last line,** so the line you're writing needn't sit at the bottom of the screen. As you type, the line keeps its place and the page moves up under it, never lower than two thirds of the way down. The menu bar is hidden while you write, so this is how you reach everything else. The bottom bar shows the hint, and an empty page tells you to just start typing.

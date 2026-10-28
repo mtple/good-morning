@@ -45,9 +45,10 @@ combo "s" "command down"
 shot saved 0.4
 combo "l" "command down"
 shot unlocked 2
-keys "Typing while not locked in. "
-shot not-locked-alert
+keys "Typing while not locked in, and none of it should go missing. "
+shot not-locked-banner
 key 53
+shot banner-dismissed 0.8
 combo "l" "command down"
 shot locked-again 2
 # About 20 more words crosses the goal: the progress line glows and the word count lifts.

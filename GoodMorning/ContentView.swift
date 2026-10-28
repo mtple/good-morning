@@ -22,6 +22,15 @@ struct ContentView: View {
                         EditorView(text: session.text, fontSize: fontSize.clamped(to: Prefs.fontSizes),
                                    isFocused: !session.isShowingCommands && !session.isShowingHelp,
                                    onChange: { session.edit($0) })
+                            // Over the bottom of the page rather than in the column, so the text doesn't move.
+                            .overlay(alignment: .bottom) {
+                                if session.isShowingLockReminder {
+                                    LockReminder(lockIn: { session.lockIn() }, dismiss: { session.hideLockReminder() })
+                                        .padding(.bottom, 10)
+                                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                                }
+                            }
+                            .animation(.easeOut(duration: 0.25), value: session.isShowingLockReminder)
                             .frame(maxWidth: column)
                             .frame(maxWidth: .infinity)
                     }
@@ -221,6 +230,34 @@ private struct ProgressLine: View {
                 }
         }
         .frame(height: 2)
+    }
+}
+
+/// Shown the first time you type outside the lock: the timer isn't running. A banner, not an alert,
+/// so it never takes the keyboard and nothing you type is lost.
+private struct LockReminder: View {
+    let lockIn: () -> Void
+    let dismiss: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Text("You're not locked in, so the timer is paused.")
+            Button("Lock in", action: lockIn)
+                .buttonStyle(.link)
+                .help("Command-L")
+            Button(action: dismiss) {
+                Image(systemName: "xmark")
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .help("Dismiss (esc)")
+        }
+        .font(.system(size: 12))
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .background(.regularMaterial, in: Capsule())
+        .overlay(Capsule().strokeBorder(.separator))
+        .shadow(color: .black.opacity(0.12), radius: 10, y: 4)
     }
 }
 
