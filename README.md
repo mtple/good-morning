@@ -8,7 +8,7 @@ No accounts and no network. Just a page, a timer and a streak.
 
 - **Opening the app locks it.** The window fills the screen, the Dock and menu bar disappear, and Cmd-Tab and Cmd-H stop working.
 - **Esc gets you out.** One tap returns you to a normal window and pauses the timer. Cmd-L (or the "Lock in" link) locks you back in and starts it again, and Cmd-L also steps you out.
-- **Typing outside the lock** asks, the first time, whether you meant to lock in, since the timer isn't running.
+- **Typing outside the lock** brings up a small banner, the first time, saying the timer is paused, with a "Lock in" link. It doesn't interrupt your typing; Esc or its × closes it.
 - **Cmd-P shows every command:** dark or light mode, lock in, text size, line width, change folder, Settings. Arrow keys and Return pick one.
 - **Cmd-+ and Cmd-−** change the text size, and Cmd-0 puts it back. Line width is in Settings and the command palette.
 - **The page scrolls on past its last line,** so the line you're writing needn't sit at the bottom of the screen. As you type, the line keeps its place and the page moves up under it, never lower than two thirds of the way down. The menu bar is hidden while you write, so this is how you reach everything else. The bottom bar shows the hint, and an empty page tells you to just start typing.
@@ -47,6 +47,8 @@ Then press Cmd-R. `project.yml` already sets the deployment target, the sandbox 
 3. Select the target, open **General**, and set **Minimum Deployments** to macOS 14.0.
 4. Open **Signing & Capabilities → App Sandbox → File Access** and set **User Selected File** to **Read/Write**. Without this, the app can't save into the folder you pick. `GoodMorning/GoodMorning.entitlements` shows the complete set.
 5. Press Cmd-R.
+
+**On GitHub,** every push that touches the app builds it on a Mac, launches it, types into it and screenshots each step (`.github/workflows/build.yml`). The screenshots are in the run's `screenshots` artifact, and the latest set is also on the `ci-screenshots` branch.
 
 **Debugging tip:** if you hit a breakpoint while the app is locked, the full-screen window covers Xcode and Cmd-Tab won't work. Press Cmd-Option-Esc, or swipe up for Mission Control, to get back to Xcode.
 
