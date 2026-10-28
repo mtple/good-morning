@@ -7,6 +7,8 @@ struct SettingsView: View {
     @AppStorage(Prefs.wordGoalKey) private var wordGoal = Prefs.defaultWordGoal
     @AppStorage(Prefs.minuteGoalKey) private var minuteGoal = Prefs.defaultMinuteGoal
     @AppStorage(Prefs.appearanceKey) private var appearance = Appearance.system
+    @AppStorage(Prefs.fontSizeKey) private var fontSize = Prefs.defaultFontSize
+    @AppStorage(Prefs.lineWidthKey) private var lineWidth = Prefs.defaultLineWidth
     @State private var openAtLogin = SMAppService.mainApp.status == .enabled
     @State private var loginStatus = SMAppService.mainApp.status
     @State private var loginError: String?  // why the last change to "Open at login" didn't take
@@ -19,6 +21,19 @@ struct SettingsView: View {
                 }
                 Stepper(value: $minuteGoal, in: 5...180, step: 5) {
                     Text("\(minuteGoal) minutes")
+                }
+            }
+
+            Section("Writing") {
+                Stepper(value: $fontSize, in: Prefs.fontSizes, step: 1) {
+                    Text("Text size: \(Int(fontSize)) pt")
+                }
+                Slider(value: $lineWidth, in: Prefs.lineWidths, step: Prefs.lineWidthStep) {
+                    Text("Line width")
+                } minimumValueLabel: {
+                    Text("Narrow")
+                } maximumValueLabel: {
+                    Text("Wide")
                 }
             }
 

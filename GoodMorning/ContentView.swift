@@ -4,26 +4,30 @@ import SwiftUI
 struct ContentView: View {
     let session: Session
 
+    @AppStorage(Prefs.fontSizeKey) private var fontSize = Prefs.defaultFontSize
+    @AppStorage(Prefs.lineWidthKey) private var lineWidth = Prefs.defaultLineWidth
+
     var body: some View {
         ZStack {
             Color.paper.ignoresSafeArea()
 
             if session.folderURL != nil {
                 VStack(spacing: 0) {
-                    ProgressLine(progress: session.progress)
+                    ProgressLine(progress: session.progress, celebration: session.celebrations)
                     if let loadError = session.loadError {
                         // No editor until the page can be read, so nothing typed here can replace it.
                         UnreadablePage(error: loadError, reveal: session.canRevealPage ? { session.revealPage() } : nil,
                                        chooseFolder: { session.chooseFolder() })
                     } else {
-                        EditorView(text: session.text, isFocused: !session.isShowingCommands && !session.isShowingHelp,
+                        EditorView(text: session.text, fontSize: fontSize.clamped(to: Prefs.fontSizes),
+                                   isFocused: !session.isShowingCommands && !session.isShowingHelp,
                                    onChange: { session.edit($0) })
-                            .frame(maxWidth: 680)
+                            .frame(maxWidth: column)
                             .frame(maxWidth: .infinity)
                     }
                     // Under the text, where the eye is, not out in the corners of a full-screen page.
                     StatusBar(session: session)
-                        .frame(maxWidth: 680)
+                        .frame(maxWidth: column)
                 }
                 .ignoresSafeArea(edges: .top)
             } else {
@@ -56,6 +60,8 @@ struct ContentView: View {
         .frame(minWidth: 520, minHeight: 420)
         .background(WindowReader { session.attach($0) })
     }
+
+    private var column: CGFloat { lineWidth.clamped(to: Prefs.lineWidths) }
 }
 
 // MARK: - Status bar
@@ -81,18 +87,17 @@ private struct StatusBar: View {
         HStack(spacing: 10) {
             if session.isComplete {
                 Text("Done for today")
+            }
+            if session.isTimerRunning {
+                // Checks run every 5 seconds; the clock on screen still ticks each second.
+                TimelineView(.periodic(from: .now, by: 1)) { _ in Text(clockText) }
             } else {
-                if session.isTimerRunning {
-                    // Checks run every 5 seconds; the clock on screen still ticks each second.
-                    TimelineView(.periodic(from: .now, by: 1)) { _ in Text(clock(session.secondsLeft)) }
-                } else {
-                    Text(clock(session.secondsLeft))
-                }
-                if !session.isFullScreen, session.loadError == nil {  // no locking in to a page that isn't there
-                    Button("Lock in") { session.lockIn() }
-                        .buttonStyle(.link)
-                        .help("Shift-Command-L")
-                }
+                Text(clockText)
+            }
+            if !session.isComplete, !session.isFullScreen, session.loadError == nil {  // no locking in to a page that isn't there
+                Button("Lock in") { session.lockIn() }
+                    .buttonStyle(.link)
+                    .help("Command-L")
             }
             if session.isFullScreen {
                 Text("esc to leave").foregroundStyle(.tertiary)
@@ -110,11 +115,20 @@ private struct StatusBar: View {
                 .help(error)  // the bar may cut it short
         } else {
             Text("\(session.wordCount.formatted()) / \(session.wordGoal.formatted()) words")
+                // A small lift when a goal is reached.
+                .phaseAnimator([false, true], trigger: session.celebrations) { content, lifted in
+                    content
+                        .scaleEffect(lifted ? 1.12 : 1)
+                        .foregroundStyle(lifted ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.secondary))
+                } animation: { lifted in
+                    lifted ? .spring(duration: 0.4, bounce: 0.5) : .easeOut(duration: 1.2)
+                }
         }
     }
 
     private var right: some View {
         HStack(spacing: 10) {
+            SaveIndicator(saves: session.pageSaves)
             Text(streakText)
             Button { session.toggleHelp() } label: {
                 Image(systemName: "questionmark.circle")
@@ -131,8 +145,29 @@ private struct StatusBar: View {
         }
     }
 
-    private func clock(_ seconds: Int) -> String {
-        String(format: "%d:%02d", seconds / 60, seconds % 60)
+    /// Counts down to the time goal, then keeps going, counting up the whole time on the page.
+    private var clockText: String {
+        let seconds = session.secondsLeft > 0 ? session.secondsLeft : session.elapsedNow
+        return String(format: "%d:%02d", seconds / 60, seconds % 60)
+    }
+}
+
+/// "Saved" fades in for a moment each time the page is written to disk, then fades away.
+private struct SaveIndicator: View {
+    let saves: Int
+    @State private var isVisible = false
+
+    var body: some View {
+        Text("Saved")
+            .foregroundStyle(.tertiary)
+            .opacity(isVisible ? 1 : 0)
+            .task(id: saves) {
+                guard saves > 0 else { return }
+                withAnimation(.easeIn(duration: 0.2)) { isVisible = true }
+                // A save that comes in sooner restarts this, and the word stays up.
+                guard (try? await Task.sleep(for: .seconds(1.5))) != nil else { return }
+                withAnimation(.easeOut(duration: 0.8)) { isVisible = false }
+            }
     }
 }
 
@@ -166,9 +201,10 @@ private struct StatusBarLayout: Layout {
     }
 }
 
-/// A hairline across the top that fills with whichever goal is further along.
+/// A hairline across the top that fills with whichever goal is further along, and glows for a moment when one is reached.
 private struct ProgressLine: View {
     let progress: Double
+    let celebration: Int  // goes up each time a goal is reached
 
     var body: some View {
         GeometryReader { geo in
@@ -176,6 +212,13 @@ private struct ProgressLine: View {
                 .fill(Color.accentColor.opacity(0.6))
                 .frame(width: geo.size.width * progress)
                 .animation(.easeOut(duration: 0.4), value: progress)
+                .phaseAnimator([false, true], trigger: celebration) { line, glowing in
+                    line
+                        .brightness(glowing ? 0.15 : 0)
+                        .shadow(color: .accentColor.opacity(glowing ? 0.9 : 0), radius: glowing ? 6 : 0)
+                } animation: { glowing in
+                    glowing ? .easeIn(duration: 0.3) : .easeOut(duration: 1.6)
+                }
         }
         .frame(height: 2)
     }
@@ -251,10 +294,10 @@ private struct HelpCard: View {
             VStack(alignment: .leading, spacing: 8) {
                 point("Write until you reach \(session.wordGoal.formatted()) words or spend \(Prefs.minuteGoal) minutes on the page, whichever comes first.")
                 point("While you write, the page fills the screen and the Dock, menu bar and Cmd-Tab are switched off.")
-                point("Esc steps out and pauses the timer. ⇧⌘L locks you back in. The timer only runs while the page is full screen and Good Morning is in front.")
+                point("Esc steps out and pauses the timer. ⌘L locks you back in, or steps out. The timer only runs while the page is full screen and Good Morning is in front.")
                 point("Reaching a goal plays a chime, counts the day toward your streak, and gives back the Dock and Cmd-Tab.")
                 point("Your page saves itself every few seconds as a plain markdown file, one per day, in \(folder).")
-                point("⌘P shows every command, like dark mode. ⌘, opens Settings.")
+                point("⌘+ and ⌘− change the text size. ⌘P shows every command, like dark mode or a wider page. ⌘, opens Settings.")
             }
             .foregroundStyle(.secondary)
             HStack {
