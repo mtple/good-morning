@@ -1,16 +1,40 @@
 import AppKit
 
-/// Goals live in UserDefaults so the Settings window can edit them with @AppStorage.
+/// Goals and the page's look live in UserDefaults so the Settings window and the page can share them with @AppStorage.
 enum Prefs {
     static let wordGoalKey = "wordGoal"
     static let minuteGoalKey = "minuteGoal"
     static let appearanceKey = "appearance"
+    static let fontSizeKey = "fontSize"
+    static let lineWidthKey = "lineWidth"
 
     static let defaultWordGoal = 750
     static let defaultMinuteGoal = 30
+    static let defaultFontSize = 18.0
+    static let fontSizes = 12.0...40.0
+    static let fontSizeStep = 2.0
+    static let defaultLineWidth = 680.0  // the text column, margins included
+    static let lineWidths = 440.0...1240.0
+    static let lineWidthStep = 80.0
 
     static var wordGoal: Int { positive(wordGoalKey, or: defaultWordGoal) }
     static var minuteGoal: Int { positive(minuteGoalKey, or: defaultMinuteGoal) }
+    static var fontSize: Double { clamped(fontSizeKey, to: fontSizes, or: defaultFontSize) }
+    static var lineWidth: Double { clamped(lineWidthKey, to: lineWidths, or: defaultLineWidth) }
+
+    /// ⌘+ and ⌘−.
+    static func changeFontSize(by step: Double) {
+        UserDefaults.standard.set((fontSize + step).clamped(to: fontSizes), forKey: fontSizeKey)
+    }
+
+    /// ⌘0.
+    static func resetFontSize() {
+        UserDefaults.standard.removeObject(forKey: fontSizeKey)
+    }
+
+    static func changeLineWidth(by step: Double) {
+        UserDefaults.standard.set((lineWidth + step).clamped(to: lineWidths), forKey: lineWidthKey)
+    }
 
     static var appearance: Appearance {
         UserDefaults.standard.string(forKey: appearanceKey).flatMap(Appearance.init) ?? .system
@@ -19,6 +43,17 @@ enum Prefs {
     private static func positive(_ key: String, or fallback: Int) -> Int {
         let value = UserDefaults.standard.integer(forKey: key)
         return value > 0 ? value : fallback
+    }
+
+    private static func clamped(_ key: String, to range: ClosedRange<Double>, or fallback: Double) -> Double {
+        let value = UserDefaults.standard.double(forKey: key)
+        return value > 0 ? value.clamped(to: range) : fallback
+    }
+}
+
+extension Double {
+    func clamped(to range: ClosedRange<Double>) -> Double {
+        min(range.upperBound, max(range.lowerBound, self))
     }
 }
 

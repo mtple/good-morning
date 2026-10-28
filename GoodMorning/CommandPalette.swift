@@ -19,29 +19,44 @@ struct CommandPalette: View {
                 .padding(14)
                 .focused($isFocused)
                 .onSubmit { if matches.indices.contains(selection) { run(matches[selection]) } }
+                // Up and down wrap around, so the last command is one key away.
                 .onKeyPress(.downArrow) {
-                    selection = max(0, min(selection + 1, matches.count - 1))
+                    if !matches.isEmpty { selection = (selection + 1) % matches.count }
                     return .handled
                 }
                 .onKeyPress(.upArrow) {
-                    selection = max(0, selection - 1)
+                    if !matches.isEmpty { selection = (selection - 1 + matches.count) % matches.count }
                     return .handled
                 }
             Divider()
-            VStack(spacing: 2) {
-                if matches.isEmpty {
-                    Text("No matching commands")
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(10)
+            ScrollViewReader { scroller in
+                ScrollView {
+                    VStack(spacing: 2) {
+                        if matches.isEmpty {
+                            Text("No matching commands")
+                                .foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(10)
+                        }
+                        ForEach(Array(matches.enumerated()), id: \.element.title) { index, command in
+                            Row(command: command, isSelected: index == selection)
+                                .id(index)
+                                .onTapGesture { run(command) }
+                                .onHover { if $0 { selection = index } }
+                        }
+                    }
+                    .padding(6)
                 }
-                ForEach(Array(matches.enumerated()), id: \.element.title) { index, command in
-                    Row(command: command, isSelected: index == selection)
-                        .onTapGesture { run(command) }
-                        .onHover { if $0 { selection = index } }
-                }
+                .frame(maxHeight: 380)
+                .fixedSize(horizontal: false, vertical: true)
+                .onChange(of: selection) { scroller.scrollTo(selection) }
             }
-            .padding(6)
+            Divider()
+            Text("↑↓ to choose, return to run, esc to close")
+                .font(.system(size: 11))
+                .foregroundStyle(.tertiary)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
         }
         .frame(width: 440)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
@@ -54,14 +69,32 @@ struct CommandPalette: View {
     private var commands: [Command] {
         var commands: [Command] = []
         if session.isFullScreen {
-            commands.append(Command(title: "Leave Full Screen", keywords: "exit escape unlock pause", shortcut: "esc") {
+            commands.append(Command(title: "Leave Full Screen", keywords: "exit escape unlock lock out pause", shortcut: "⌘L") {
                 session.leaveLockdown()
             })
         } else if session.folderURL != nil, !session.isComplete {
-            commands.append(Command(title: "Lock In", keywords: "full screen focus resume start", shortcut: "⇧⌘L") {
+            commands.append(Command(title: "Lock In", keywords: "full screen focus resume start", shortcut: "⌘L") {
                 session.lockIn()
             })
         }
+        commands.append(Command(title: "Save Now", keywords: "write disk", shortcut: "⌘S") {
+            session.saveNow()
+        })
+        commands.append(Command(title: "Bigger Text", keywords: "font size larger zoom in increase", shortcut: "⌘+") {
+            Prefs.changeFontSize(by: Prefs.fontSizeStep)
+        })
+        commands.append(Command(title: "Smaller Text", keywords: "font size zoom out decrease", shortcut: "⌘−") {
+            Prefs.changeFontSize(by: -Prefs.fontSizeStep)
+        })
+        commands.append(Command(title: "Default Text Size", keywords: "font size reset actual zoom", shortcut: "⌘0") {
+            Prefs.resetFontSize()
+        })
+        commands.append(Command(title: "Wider Lines", keywords: "line width column page measure") {
+            Prefs.changeLineWidth(by: Prefs.lineWidthStep)
+        })
+        commands.append(Command(title: "Narrower Lines", keywords: "line width column page measure") {
+            Prefs.changeLineWidth(by: -Prefs.lineWidthStep)
+        })
         let current = Prefs.appearance
         for appearance in Appearance.allCases {
             commands.append(Command(title: "Appearance: \(appearance.title)", keywords: "mode theme color night day",
@@ -74,7 +107,7 @@ struct CommandPalette: View {
                                 keywords: "pages save location obsidian vault") {
             session.chooseFolder()
         })
-        commands.append(Command(title: "Settings…", keywords: "preferences goal words minutes login", shortcut: "⌘,") {
+        commands.append(Command(title: "Settings…", keywords: "preferences goal words minutes login font size line width", shortcut: "⌘,") {
             openSettings()
         })
         commands.append(Command(title: "Help: How Good Morning Works", keywords: "info about guide lost what why ?", shortcut: "⌘?") {

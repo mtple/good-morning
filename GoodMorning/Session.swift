@@ -29,6 +29,8 @@ final class Session {
     private(set) var loadError: String?    // today's page couldn't be read: it's left untouched and not shown
     private(set) var saveError: String?    // the last save failed (the page, or else the time log); cleared by one that works
     private(set) var logNotice: String?    // the time log is damaged or unreadable, copied from the store
+    private(set) var pageSaves = 0         // goes up each time the page reaches disk, for the "Saved" indicator
+    private(set) var celebrations = 0      // goes up each time a goal is reached, for its little animation
 
     /// The problem to show, most serious first.
     var errorMessage: String? { loadError ?? saveError ?? logNotice }
@@ -69,6 +71,7 @@ final class Session {
     @ObservationIgnored private var isTurningPage = false  // a new folder or new day is under way
     @ObservationIgnored private var notices: [Notice] = []
     @ObservationIgnored private var lastEdit: SuspendingClock.Instant?  // when you last typed
+    @ObservationIgnored private var hasWarnedUnlocked = false  // asked to lock in since the lock was last on
 
     /// Something to tell you that can wait for a calm moment (see showNotice). Kept across a quit if it wasn't shown.
     private struct Notice: Codable {
@@ -247,6 +250,33 @@ final class Session {
         textDirty = true
         lastEdit = .now
         checkGoal()
+        if !hasWarnedUnlocked, !isFullScreen, pendingLock == nil, !isComplete { warnNotLockedIn() }
+    }
+
+    /// The first time you type outside the lock, a reminder that the timer isn't running, with a way to lock in.
+    /// Once per stretch outside the lock. A sheet, so what you've typed stays put and Esc just closes it.
+    private func warnNotLockedIn() {
+        guard let window, window.attachedSheet == nil, NSApp.isActive else { return }
+        hasWarnedUnlocked = true
+        let alert = NSAlert()
+        alert.messageText = "You're not locked in"
+        alert.informativeText = "The timer only runs while the page fills the screen. Lock in to start it. ⌘L locks you in or out at any time."
+        alert.addButton(withTitle: "Lock In")
+        alert.addButton(withTitle: "Keep Writing")
+        alert.buttons[1].keyEquivalent = "\u{1b}"
+        alert.beginSheetModal(for: window) { [weak self] response in
+            guard response == .alertFirstButtonReturn else { return }
+            MainActor.assumeIsolated { self?.lockIn() }
+        }
+    }
+
+    /// ⌘S. Writes the page now, even with nothing new, so "Saved" only shows once it's really on disk: a file deleted
+    /// outside since the last save is written again, and one changed outside is kept beside it first, as on any save.
+    /// Not while the page couldn't be read, so nothing here goes over it.
+    func saveNow() {
+        guard loadError == nil else { return }
+        textDirty = true
+        save()
     }
 
     /// Autosave runs every few seconds, on switching away, and on quit. True when the page is safely on disk
@@ -264,7 +294,11 @@ final class Session {
             do {
                 try keepOtherVersion()
                 try store.write(text, for: day)
-                if !(text.isEmpty && onDisk == nil) { onDisk = text }  // an empty page with no file stays without one
+                // An empty page with no file stays without one, and there's nothing to say "Saved" about.
+                if !(text.isEmpty && onDisk == nil) {
+                    onDisk = text
+                    pageSaves += 1
+                }
                 textDirty = false
                 pageProblem = nil
             } catch {
@@ -489,6 +523,7 @@ final class Session {
         markComplete()
         streak = store.streak(endingOn: day, wordGoal: wordGoal)
         save()
+        celebrations += 1
         NSSound(named: "Glass")?.play()
         if isLocked {
             lockdown.relax()
@@ -519,6 +554,7 @@ final class Session {
             self.lockdown.engage(window)
             self.isLocked = true
             self.isFullScreen = true
+            self.hasWarnedUnlocked = false
             self.updateClock()
         }
     }
@@ -533,6 +569,15 @@ final class Session {
         isFullScreen = false
         updateClock()
         window.makeKeyAndOrderFront(nil)
+    }
+
+    /// ⌘L: lock in, or step out of the full-screen page (or call off a lock on its way), like Esc.
+    func toggleLock() {
+        if isFullScreen || pendingLock != nil {
+            leaveLockdown()
+        } else {
+            lockIn()
+        }
     }
 
     // MARK: Commands
@@ -567,9 +612,16 @@ final class Session {
     /// One tap of Esc closes the command palette or help if either is up, or else leaves the full-screen page,
     /// locked or not, or calls off a lock that's on its way. Elsewhere Esc is swallowed, so the text view doesn't
     /// pop up its word-completion list.
+    ///
+    /// Also ⌘=, the unshifted ⌘+, which makes the text bigger like the Bigger Text menu item.
     private func installEscapeKey() {
         guard keyMonitor == nil else { return }
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            if event.modifierFlags.intersection([.command, .shift, .option, .control]) == .command,
+               event.charactersIgnoringModifiers == "=" {
+                Prefs.changeFontSize(by: Prefs.fontSizeStep)
+                return nil
+            }
             guard event.keyCode == 53 else { return event } // 53 = Esc
             let windowNumber = event.windowNumber
             let handled = MainActor.assumeIsolated {
