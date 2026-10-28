@@ -46,6 +46,13 @@ final class Session {
         max(0, elapsed + runningSeconds)
     }
 
+    /// The same, to the fraction of a second, for drawing things that move smoothly with the clock.
+    var elapsedExact: Double {
+        guard let since = runningSince else { return Double(elapsed) }
+        let running = since.duration(to: .now).components
+        return Double(elapsed) + max(0, Double(running.seconds) + Double(running.attoseconds) / 1e18)
+    }
+
     /// The further along of the two goals, 0...1.
     var progress: Double {
         if isComplete { return 1 }
