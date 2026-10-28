@@ -12,10 +12,28 @@ struct GoodMorningApp: App {
         .defaultSize(width: 820, height: 900)
         .commands {
             CommandGroup(replacing: .newItem) {
-                Button("Lock In") { appDelegate.session.lockIn() }
-                    .keyboardShortcut("l", modifiers: [.command, .shift])
+                Button("Lock In or Out") { appDelegate.session.toggleLock() }
+                    .keyboardShortcut("l")
                 Button("Commands…") { appDelegate.session.toggleCommands() }
                     .keyboardShortcut("p")
+            }
+            CommandGroup(replacing: .saveItem) {
+                Button("Save") { appDelegate.session.saveNow() }
+                    .keyboardShortcut("s")
+            }
+            // ⌘P is the command palette, not Print.
+            CommandGroup(replacing: .printItem) {}
+            CommandGroup(after: .toolbar) {
+                // ⌘= works too (see Session.installEscapeKey).
+                Button("Bigger Text") { Prefs.changeFontSize(by: Prefs.fontSizeStep) }
+                    .keyboardShortcut("+")
+                Button("Smaller Text") { Prefs.changeFontSize(by: -Prefs.fontSizeStep) }
+                    .keyboardShortcut("-")
+                Button("Default Text Size") { Prefs.resetFontSize() }
+                    .keyboardShortcut("0")
+                Divider()
+                Button("Wider Lines") { Prefs.changeLineWidth(by: Prefs.lineWidthStep) }
+                Button("Narrower Lines") { Prefs.changeLineWidth(by: -Prefs.lineWidthStep) }
             }
             CommandGroup(replacing: .help) {
                 Button("How Good Morning Works") { appDelegate.session.toggleHelp() }
