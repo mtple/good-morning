@@ -50,6 +50,10 @@ shot not-locked-alert
 key 53
 combo "l" "command down"
 shot locked-again 2
+# About 20 more words crosses the goal: the progress line glows and the word count lifts.
+keys "And now enough words to reach the goal, one after another, until the count goes past it and the page lets go."
+shot goal-reached 0.3
+shot goal-settled 2.5
 ls shots
 echo "--- pages folder"; ls -la "$HOME/Pages"
 echo "--- end of today's page"; cat "$HOME/Pages"/2*.md | tail -c 400; echo
