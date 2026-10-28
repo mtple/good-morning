@@ -24,6 +24,7 @@ final class Session {
     private(set) var isComplete = false    // today counts toward the streak
     private(set) var isShowingCommands = false  // the Cmd-P palette is up
     private(set) var isShowingHelp = false      // the "How Good Morning works" card is up
+    private(set) var isShowingCalendar = false  // the calendar of past days is up
     private(set) var streak = 0
     private(set) var folderURL: URL?
     private(set) var loadError: String?    // today's page couldn't be read: it's left untouched and not shown
@@ -39,6 +40,8 @@ final class Session {
     var secondsGoal: Int { Prefs.minuteGoal * 60 }
     var secondsLeft: Int { max(0, secondsGoal - elapsedNow) }
     var isTimerRunning: Bool { runningSince != nil }
+    var isShowingCard: Bool { isShowingCommands || isShowingHelp || isShowingCalendar }  // typing doesn't reach the page
+    var currentDay: Day { day }  // the open page's day
 
     /// Today's seconds on the page, including the stretch running right now.
     var elapsedNow: Int {
@@ -538,6 +541,18 @@ final class Session {
         store.setRecord(record, for: day)
     }
 
+    /// Words, time and whether the day counted, for each of these days up to today. Today's comes from the page
+    /// as it is right now, saved or not.
+    func summaries(for days: [Day]) -> [Day: JournalStore.DaySummary] {
+        var summaries: [Day: JournalStore.DaySummary] = [:]
+        for other in days where other.date <= day.date {
+            summaries[other] = other == day
+                ? JournalStore.DaySummary(words: wordCount, seconds: elapsedNow, counts: isComplete)
+                : store.summary(of: other, wordGoal: wordGoal)
+        }
+        return summaries
+    }
+
     // MARK: Lockdown
 
     /// Lock (again). Does nothing once today's goal is met, while the page couldn't be read,
@@ -587,6 +602,7 @@ final class Session {
         isShowingCommands.toggle()
         if isShowingCommands {
             isShowingHelp = false
+            isShowingCalendar = false
             window?.makeKeyAndOrderFront(nil)
         }
     }
@@ -600,6 +616,7 @@ final class Session {
         isShowingHelp.toggle()
         if isShowingHelp {
             isShowingCommands = false
+            isShowingCalendar = false
             window?.makeKeyAndOrderFront(nil)
             window?.makeFirstResponder(nil)
         }
@@ -609,7 +626,22 @@ final class Session {
         isShowingHelp = false
     }
 
-    /// One tap of Esc closes the command palette or help if either is up, or else leaves the full-screen page,
+    /// ⌘Y, a click on the streak, or Calendar in the palette. Not before there's a folder to look in.
+    func toggleCalendar() {
+        guard folderURL != nil || isShowingCalendar else { return }
+        isShowingCalendar.toggle()
+        if isShowingCalendar {
+            isShowingCommands = false
+            isShowingHelp = false
+            window?.makeKeyAndOrderFront(nil)
+        }
+    }
+
+    func hideCalendar() {
+        isShowingCalendar = false
+    }
+
+    /// One tap of Esc closes the command palette, help or the calendar if one is up, or else leaves the full-screen page,
     /// locked or not, or calls off a lock that's on its way. Elsewhere Esc is swallowed, so the text view doesn't
     /// pop up its word-completion list.
     ///
@@ -639,6 +671,8 @@ final class Session {
             hideCommands()
         } else if isShowingHelp {
             hideHelp()
+        } else if isShowingCalendar {
+            hideCalendar()
         } else if isFullScreen || pendingLock != nil {
             leaveLockdown()
         }

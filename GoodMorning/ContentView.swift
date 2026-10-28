@@ -20,7 +20,7 @@ struct ContentView: View {
                                        chooseFolder: { session.chooseFolder() })
                     } else {
                         EditorView(text: session.text, fontSize: fontSize.clamped(to: Prefs.fontSizes),
-                                   isFocused: !session.isShowingCommands && !session.isShowingHelp,
+                                   isFocused: !session.isShowingCard,
                                    onChange: { session.edit($0) })
                             .frame(maxWidth: column)
                             .frame(maxWidth: .infinity)
@@ -33,7 +33,7 @@ struct ContentView: View {
             } else {
                 Welcome(choose: { session.chooseFolder() })
                     // Otherwise its Return shortcut beats the palette (or help) to the key.
-                    .disabled(session.isShowingCommands || session.isShowingHelp)
+                    .disabled(session.isShowingCard)
             }
 
             if session.isShowingHelp {
@@ -42,6 +42,16 @@ struct ContentView: View {
                     .ignoresSafeArea()
                     .onTapGesture { session.hideHelp() }
                 HelpCard(session: session)
+                    .padding(.top, 80)
+                    .frame(maxHeight: .infinity, alignment: .top)
+            }
+
+            if session.isShowingCalendar {
+                Color.clear
+                    .contentShape(Rectangle())
+                    .ignoresSafeArea()
+                    .onTapGesture { session.hideCalendar() }
+                CalendarCard(session: session)
                     .padding(.top, 80)
                     .frame(maxHeight: .infinity, alignment: .top)
             }
@@ -129,7 +139,9 @@ private struct StatusBar: View {
     private var right: some View {
         HStack(spacing: 10) {
             SaveIndicator(saves: session.pageSaves)
-            Text(streakText)
+            Button(streakText) { session.toggleCalendar() }
+                .buttonStyle(.plain)
+                .help("Calendar (⌘Y)")
             Button { session.toggleHelp() } label: {
                 Image(systemName: "questionmark.circle")
             }
@@ -296,6 +308,7 @@ private struct HelpCard: View {
                 point("While you write, the page fills the screen and the Dock, menu bar and Cmd-Tab are switched off.")
                 point("Esc steps out and pauses the timer. ⌘L locks you back in, or steps out. The timer only runs while the page is full screen and Good Morning is in front.")
                 point("Reaching a goal plays a chime, counts the day toward your streak, and gives back the Dock and Cmd-Tab.")
+                point("Click your streak, or press ⌘Y, for a calendar of the days you've written.")
                 point("Your page saves itself every few seconds as a plain markdown file, one per day, in \(folder).")
                 point("⌘+ and ⌘− change the text size. ⌘P shows every command, like dark mode or a wider page. ⌘, opens Settings.")
             }
