@@ -31,6 +31,7 @@ final class Session {
     private(set) var logNotice: String?    // the time log is damaged or unreadable, copied from the store
     private(set) var pageSaves = 0         // goes up each time the page reaches disk, for the "Saved" indicator
     private(set) var celebrations = 0      // goes up each time a goal is reached, for its little animation
+    private(set) var isShowingLockReminder = false  // you typed outside the lock: a banner offers to lock in
 
     /// The problem to show, most serious first.
     var errorMessage: String? { loadError ?? saveError ?? logNotice }
@@ -43,6 +44,13 @@ final class Session {
     /// Today's seconds on the page, including the stretch running right now.
     var elapsedNow: Int {
         max(0, elapsed + runningSeconds)
+    }
+
+    /// The same, to the fraction of a second, for drawing things that move smoothly with the clock.
+    var elapsedExact: Double {
+        guard let since = runningSince else { return Double(elapsed) }
+        let running = since.duration(to: .now).components
+        return Double(elapsed) + max(0, Double(running.seconds) + Double(running.attoseconds) / 1e18)
     }
 
     /// The further along of the two goals, 0...1.
@@ -217,6 +225,7 @@ final class Session {
         }
         wordCount = countWords(text)
         textDirty = false
+        isShowingLockReminder = false
         pageProblem = nil  // only reached once the last page was saved or copied aside
         let record = store.record(for: day)
         runningSince = nil
@@ -250,24 +259,16 @@ final class Session {
         textDirty = true
         lastEdit = .now
         checkGoal()
-        if !hasWarnedUnlocked, !isFullScreen, pendingLock == nil, !isComplete { warnNotLockedIn() }
+        // The first time you type outside the lock, a banner says the timer isn't running and offers to lock in.
+        // Once per stretch outside the lock. It never takes the keyboard, so writing carries on.
+        if !hasWarnedUnlocked, !isFullScreen, pendingLock == nil, !isComplete {
+            hasWarnedUnlocked = true
+            isShowingLockReminder = true
+        }
     }
 
-    /// The first time you type outside the lock, a reminder that the timer isn't running, with a way to lock in.
-    /// Once per stretch outside the lock. A sheet, so what you've typed stays put and Esc just closes it.
-    private func warnNotLockedIn() {
-        guard let window, window.attachedSheet == nil, NSApp.isActive else { return }
-        hasWarnedUnlocked = true
-        let alert = NSAlert()
-        alert.messageText = "You're not locked in"
-        alert.informativeText = "The timer only runs while the page fills the screen. Lock in to start it. ⌘L locks you in or out at any time."
-        alert.addButton(withTitle: "Lock In")
-        alert.addButton(withTitle: "Keep Writing")
-        alert.buttons[1].keyEquivalent = "\u{1b}"
-        alert.beginSheetModal(for: window) { [weak self] response in
-            guard response == .alertFirstButtonReturn else { return }
-            MainActor.assumeIsolated { self?.lockIn() }
-        }
+    func hideLockReminder() {
+        isShowingLockReminder = false
     }
 
     /// ⌘S. Writes the page now, even with nothing new, so "Saved" only shows once it's really on disk: a file deleted
@@ -524,6 +525,7 @@ final class Session {
         streak = store.streak(endingOn: day, wordGoal: wordGoal)
         save()
         celebrations += 1
+        isShowingLockReminder = false
         NSSound(named: "Glass")?.play()
         if isLocked {
             lockdown.relax()
@@ -555,6 +557,7 @@ final class Session {
             self.isLocked = true
             self.isFullScreen = true
             self.hasWarnedUnlocked = false
+            self.isShowingLockReminder = false
             self.updateClock()
         }
     }
@@ -641,6 +644,8 @@ final class Session {
             hideHelp()
         } else if isFullScreen || pendingLock != nil {
             leaveLockdown()
+        } else if isShowingLockReminder {
+            hideLockReminder()
         }
         return true
     }
