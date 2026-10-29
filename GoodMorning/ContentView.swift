@@ -680,7 +680,7 @@ private struct HelpCard: View {
                 point("Reaching a goal plays a chime, counts the day toward your streak, and gives back the Dock and Cmd-Tab.")
                 point("Click your streak, or press ⌘Y, for a calendar of the days you've written.")
                 point("Your page saves itself every few seconds as a plain markdown file, one per day, in \(folder).")
-                point("⌘+ and ⌘− change the text size. ⌘P shows every command, like dark mode or a wider page. ⌘, opens Settings.")
+                point("⌘+ and ⌘− change the text size. ⌘P shows every command, like dark mode, a wider page or a typewriter sound. ⌘, opens Settings.")
             }
             .foregroundStyle(.secondary)
             HStack {

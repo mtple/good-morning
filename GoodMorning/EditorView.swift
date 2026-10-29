@@ -149,6 +149,11 @@ final class PageTextView: NSTextView {
         NSAttributedString(string: placeholder, attributes: attributes).draw(in: rect)
     }
 
+    override func keyDown(with event: NSEvent) {
+        if let stroke = Typewriter.stroke(for: event) { Typewriter.shared.play(stroke) }
+        super.keyDown(with: event)
+    }
+
     override func shouldChangeText(in affectedCharRange: NSRange, replacementString: String?) -> Bool {
         guard super.shouldChangeText(in: affectedCharRange, replacementString: replacementString) else { return false }
         // Only when the caret is on screen. Typing somewhere scrolled out of sight scrolls to it as usual.

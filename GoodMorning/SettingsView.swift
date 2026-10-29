@@ -9,6 +9,7 @@ struct SettingsView: View {
     @AppStorage(Prefs.appearanceKey) private var appearance = Appearance.system
     @AppStorage(Prefs.fontSizeKey) private var fontSize = Prefs.defaultFontSize
     @AppStorage(Prefs.lineWidthKey) private var lineWidth = Prefs.defaultLineWidth
+    @AppStorage(Prefs.typingSoundKey) private var typingSound = false
     @State private var openAtLogin = SMAppService.mainApp.status == .enabled
     @State private var loginStatus = SMAppService.mainApp.status
     @State private var loginError: String?  // why the last change to "Open at login" didn't take
@@ -35,6 +36,8 @@ struct SettingsView: View {
                 } maximumValueLabel: {
                     Text("Wide")
                 }
+                Toggle("Typewriter sound", isOn: $typingSound)
+                    .onChange(of: typingSound) { _, isOn in if isOn { Typewriter.shared.play(.key) } }
             }
 
             Section("Pages") {

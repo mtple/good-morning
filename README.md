@@ -9,7 +9,8 @@ No accounts and no network. Just a page, a timer and a streak.
 - **Opening the app locks it.** The window fills the screen, the Dock and menu bar disappear, and Cmd-Tab and Cmd-H stop working.
 - **Esc gets you out.** One tap returns you to a normal window and pauses the timer. Cmd-L (or the "Lock in" link) locks you back in and starts it again, and Cmd-L also steps you out.
 - **Typing outside the lock** brings up a small banner, the first time, saying the timer is paused, with a "Lock in" link. It doesn't interrupt your typing; Esc or its × closes it.
-- **Cmd-P shows every command:** dark or light mode, lock in, the calendar, text size, line width, change folder, Settings. Arrow keys and Return pick one.
+- **Cmd-P shows every command:** dark or light mode, lock in, the calendar, text size, the typewriter sound, line width, change folder, Settings. Arrow keys and Return pick one.
+- **A typewriter sound,** off at first, clacks for each key, thumps for the space bar and ratchets for Return. Turn it on in Settings or the command palette. The sounds are made in code, so nothing is recorded or downloaded.
 - **Cmd-+ and Cmd-−** change the text size, and Cmd-0 puts it back. Line width is in Settings and the command palette.
 - **The page scrolls on past its last line,** so the line you're writing needn't sit at the bottom of the screen. As you type, the line keeps its place and the page moves up under it, never lower than two thirds of the way down. The menu bar is hidden while you write, so this is how you reach everything else. The bottom bar shows the hint, and an empty page tells you to just start typing.
 - **Lost?** The ? at the bottom right (or Cmd-?, or Help in the menu bar) opens a short card that explains all of this.
@@ -23,7 +24,7 @@ No accounts and no network. Just a page, a timer and a streak.
 - **If a save fails** (say the folder's drive is gone), the page stays on screen with the error and autosave keeps trying. Before leaving a page it couldn't save (changing folders, a new day, quitting), Good Morning copies it to its own Unsaved Pages folder and tells you where. That's `Application Support/Good Morning/Unsaved Pages` inside the app's container in `~/Library/Containers`. If even that fails, quitting asks first. A page that can't be read is left untouched and not shown.
 - **Time is logged** in a hidden `.good-morning.json` in the same folder. Word counts come from the files themselves, but time can't, so it's stored there. Obsidian ignores dotfiles. If you delete the log, you lose only the days that counted by time; days that reached the word goal still count. A damaged log is repaired, keeping every day that still reads, and the original is saved beside it as a hidden file.
 - **If the app stays open overnight,** switching back to it the next morning starts a new page and locks again.
-- **Settings** (Cmd-,) holds the goals, the text size and line width, the folder, the appearance (light, dark, or matching the Mac), and "Open at login", which makes it the first thing on screen in the morning.
+- **Settings** (Cmd-,) holds the goals, the text size and line width, the typewriter sound, the folder, the appearance (light, dark, or matching the Mac), and "Open at login", which makes it the first thing on screen in the morning.
 
 The lock is meant to be easy to get out of. Force Quit, Mission Control and Spotlight still work. The lock only applies while this app is frontmost, and AppKit lifts it as soon as the app quits or crashes.
 
@@ -61,6 +62,7 @@ Then press Cmd-R. `project.yml` already sets the deployment target, the sandbox 
 | `Session.swift` | Today's page, timer, goals, streak, autosave, and the Esc key |
 | `Lockdown.swift` | Hiding the Dock and menu bar, disabling Cmd-Tab, filling the screen and restoring the window |
 | `JournalStore.swift` | The folder bookmark, reading and writing daily files, the time log, and the streak calculation |
+| `Typewriter.swift` | The optional typewriter sound, made up in code, and which keys make which sound |
 | `EditorView.swift` | The plain-text editor (spellcheck and smart punctuation off), its empty-page hint, its typography, and the scrolling that keeps your line in place |
 | `ContentView.swift` | Layout, the status bar, the progress line, the margin trackers, the first-launch screen, the unreadable-page message, and the help card |
 | `CalendarView.swift` | The Cmd-Y calendar: a month of days, which counted, and each day's words and time |

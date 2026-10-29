@@ -7,6 +7,7 @@ enum Prefs {
     static let appearanceKey = "appearance"
     static let fontSizeKey = "fontSize"
     static let lineWidthKey = "lineWidth"
+    static let typingSoundKey = "typingSound"
 
     static let defaultWordGoal = 750
     static let defaultMinuteGoal = 30
@@ -21,6 +22,7 @@ enum Prefs {
     static var minuteGoal: Int { positive(minuteGoalKey, or: defaultMinuteGoal) }
     static var fontSize: Double { clamped(fontSizeKey, to: fontSizes, or: defaultFontSize) }
     static var lineWidth: Double { clamped(lineWidthKey, to: lineWidths, or: defaultLineWidth) }
+    static var typingSound: Bool { UserDefaults.standard.bool(forKey: typingSoundKey) }  // off unless turned on
 
     /// ⌘+ and ⌘−.
     static func changeFontSize(by step: Double) {
@@ -34,6 +36,12 @@ enum Prefs {
 
     static func changeLineWidth(by step: Double) {
         UserDefaults.standard.set((lineWidth + step).clamped(to: lineWidths), forKey: lineWidthKey)
+    }
+
+    /// Turning it on plays a key, so you hear what you chose.
+    @MainActor static func setTypingSound(_ isOn: Bool) {
+        UserDefaults.standard.set(isOn, forKey: typingSoundKey)
+        if isOn { Typewriter.shared.play(.key) }
     }
 
     static var appearance: Appearance {

@@ -13,6 +13,7 @@
 		332CAA2C560C46ED6E6665A6 /* Prefs.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1689D44561B1B2C823697CC /* Prefs.swift */; };
 		5D6F5DD15131E6895EE798C1 /* Lockdown.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D946614C2FDC0C7E289CA55 /* Lockdown.swift */; };
 		7B03AE410EA674F67CDD0851 /* GoodMorningApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90A0E6418433087F051833ED /* GoodMorningApp.swift */; };
+		86D1E97935C32462D80319E1 /* Typewriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = AFB5863B8FAD428BC62A543E /* Typewriter.swift */; };
 		86E68824434B07498A4AB956 /* EditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA9476BE65380E5C497A664D /* EditorView.swift */; };
 		A3B1B0F4565D019D4D0CD1AB /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6A429828EEEDDE2B2104104 /* ContentView.swift */; };
 		BE15ACD1C7CA560ACCEA94B8 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE7E81E1E610B7747CF3E460 /* SettingsView.swift */; };
@@ -27,6 +28,7 @@
 		7D946614C2FDC0C7E289CA55 /* Lockdown.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Lockdown.swift; sourceTree = "<group>"; };
 		90A0E6418433087F051833ED /* GoodMorningApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoodMorningApp.swift; sourceTree = "<group>"; };
 		AC0BBD8D46A701FF7CA5B15E /* GoodMorning.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GoodMorning.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		AFB5863B8FAD428BC62A543E /* Typewriter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Typewriter.swift; sourceTree = "<group>"; };
 		C1692DF6297DCF911B32106A /* CalendarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarView.swift; sourceTree = "<group>"; };
 		D6A429828EEEDDE2B2104104 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		E1689D44561B1B2C823697CC /* Prefs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Prefs.swift; sourceTree = "<group>"; };
@@ -57,6 +59,7 @@
 				E1689D44561B1B2C823697CC /* Prefs.swift */,
 				02C2AF3240F0955DCDAC18A3 /* Session.swift */,
 				EE7E81E1E610B7747CF3E460 /* SettingsView.swift */,
+				AFB5863B8FAD428BC62A543E /* Typewriter.swift */,
 			);
 			path = GoodMorning;
 			sourceTree = "<group>";
@@ -137,6 +140,7 @@
 				332CAA2C560C46ED6E6665A6 /* Prefs.swift in Sources */,
 				F9D100A332448E74C427595C /* Session.swift in Sources */,
 				BE15ACD1C7CA560ACCEA94B8 /* SettingsView.swift in Sources */,
+				86D1E97935C32462D80319E1 /* Typewriter.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
