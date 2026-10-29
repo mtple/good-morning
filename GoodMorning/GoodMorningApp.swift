@@ -16,6 +16,8 @@ struct GoodMorningApp: App {
                     .keyboardShortcut("l")
                 Button("Commands…") { appDelegate.session.toggleCommands() }
                     .keyboardShortcut("p")
+                Button("Calendar") { appDelegate.session.toggleCalendar() }
+                    .keyboardShortcut("y")
             }
             CommandGroup(replacing: .saveItem) {
                 Button("Save") { appDelegate.session.saveNow() }

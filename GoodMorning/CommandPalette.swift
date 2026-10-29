@@ -77,6 +77,11 @@ struct CommandPalette: View {
                 session.lockIn()
             })
         }
+        if session.folderURL != nil {
+            commands.append(Command(title: "Calendar", keywords: "history streak past days month stats", shortcut: "⌘Y") {
+                session.toggleCalendar()
+            })
+        }
         commands.append(Command(title: "Save Now", keywords: "write disk", shortcut: "⌘S") {
             session.saveNow()
         })
