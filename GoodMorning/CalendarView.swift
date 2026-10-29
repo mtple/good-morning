@@ -9,6 +9,8 @@ struct CalendarCard: View {
 
     @State private var month: Month
     @State private var pastSummaries: [Day: JournalStore.DaySummary] = [:]
+    // Watched so that changing the goal in Settings reads the past days again; the session reads the goal itself.
+    @AppStorage(Prefs.wordGoalKey) private var wordGoal = Prefs.defaultWordGoal
     @FocusState private var isFocused: Bool
 
     init(session: Session) {
@@ -70,7 +72,7 @@ struct CalendarCard: View {
         }
         .onAppear { isFocused = true }
         // Reads each of the month's pages to count its words: a month is only a few dozen small files.
-        .task(id: Source(month: month, folder: session.folderURL, today: today, wordGoal: session.wordGoal)) {
+        .task(id: Source(month: month, folder: session.folderURL, today: today, wordGoal: wordGoal)) {
             pastSummaries = session.pastSummaries(for: month.days)
         }
     }
