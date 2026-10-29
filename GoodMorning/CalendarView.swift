@@ -8,7 +8,7 @@ struct CalendarCard: View {
     let session: Session
 
     @State private var month: Month
-    @State private var summaries: [Day: JournalStore.DaySummary] = [:]
+    @State private var pastSummaries: [Day: JournalStore.DaySummary] = [:]
     @FocusState private var isFocused: Bool
 
     init(session: Session) {
@@ -18,6 +18,22 @@ struct CalendarCard: View {
 
     private var today: Day { session.currentDay }
     private var isThisMonth: Bool { month == Month(containing: today) }
+
+    /// The month's past days as read from the folder, plus today straight from the session, so today's ring,
+    /// time and the totals keep up while the card is open.
+    private var summaries: [Day: JournalStore.DaySummary] {
+        var summaries = pastSummaries
+        if isThisMonth { summaries[today] = session.todaySummary }
+        return summaries
+    }
+
+    /// What the past days were read for. A new folder, a new day or a new word goal reads them again.
+    private struct Source: Hashable {
+        let month: Month
+        let folder: URL?
+        let today: Day
+        let wordGoal: Int
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -54,7 +70,9 @@ struct CalendarCard: View {
         }
         .onAppear { isFocused = true }
         // Reads each of the month's pages to count its words: a month is only a few dozen small files.
-        .task(id: month) { summaries = session.summaries(for: month.days) }
+        .task(id: Source(month: month, folder: session.folderURL, today: today, wordGoal: session.wordGoal)) {
+            pastSummaries = session.pastSummaries(for: month.days)
+        }
     }
 
     private var header: some View {

@@ -543,16 +543,18 @@ final class Session {
         store.setRecord(record, for: day)
     }
 
-    /// Words, time and whether the day counted, for each of these days up to today. Today's comes from the page
-    /// as it is right now, saved or not.
-    func summaries(for days: [Day]) -> [Day: JournalStore.DaySummary] {
+    /// Words, time and whether the day counted, for each of these days before today, read from the folder.
+    func pastSummaries(for days: [Day]) -> [Day: JournalStore.DaySummary] {
         var summaries: [Day: JournalStore.DaySummary] = [:]
-        for other in days where other.date <= day.date {
-            summaries[other] = other == day
-                ? JournalStore.DaySummary(words: wordCount, seconds: elapsedNow, counts: isComplete)
-                : store.summary(of: other, wordGoal: wordGoal)
+        for other in days where other.date < day.date {
+            summaries[other] = store.summary(of: other, wordGoal: wordGoal)
         }
         return summaries
+    }
+
+    /// Today's words, time and whether it counts, from the page as it is right now, saved or not.
+    var todaySummary: JournalStore.DaySummary {
+        JournalStore.DaySummary(words: wordCount, seconds: elapsedNow, counts: isComplete)
     }
 
     // MARK: Lockdown
