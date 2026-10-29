@@ -214,6 +214,20 @@ final class JournalStore {
         return countWords((try? read(day)) ?? "") >= wordGoal
     }
 
+    /// What one day came to, for the calendar.
+    struct DaySummary: Equatable {
+        var words = 0
+        var seconds = 0
+        var counts = false
+    }
+
+    /// A page that can't be read shows as nothing written; it's left as it is.
+    func summary(of day: Day, wordGoal: Int) -> DaySummary {
+        let words = countWords((try? read(day)) ?? "")
+        let logged = record(for: day)
+        return DaySummary(words: words, seconds: logged.seconds, counts: logged.completed || words >= wordGoal)
+    }
+
     /// Consecutive counted days ending today. If today isn't done yet, the streak
     /// still stands from yesterday until the day is over.
     func streak(endingOn today: Day, wordGoal: Int) -> Int {

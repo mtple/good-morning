@@ -118,6 +118,31 @@ struct Day: Hashable {
     }()
 }
 
+/// The parts of a day, for the calendar. Gregorian, like the file names.
+extension Day {
+    /// Nil for a date that doesn't exist, like February 30.
+    init?(year: Int, month: Int, day: Int) {
+        guard let date = Self.utc.date(from: DateComponents(year: year, month: month, day: day, hour: 12)),
+              Self.utc.component(.day, from: date) == day else { return nil }
+        self.init(date: date)
+    }
+
+    var year: Int { Self.utc.component(.year, from: date) }
+    var month: Int { Self.utc.component(.month, from: date) }
+    var dayOfMonth: Int { Self.utc.component(.day, from: date) }
+    var weekday: Int { Self.utc.component(.weekday, from: date) }  // 1 is Sunday
+    var daysInMonth: Int { Self.utc.range(of: .day, in: .month, for: date)?.count ?? 30 }
+
+    /// "October 2026", "Friday, October 23" and so on, in the Mac's language, for this calendar date wherever you are.
+    func formatted(_ template: String) -> String {
+        let formatter = DateFormatter()
+        formatter.calendar = Self.utc
+        formatter.timeZone = Self.utc.timeZone
+        formatter.setLocalizedDateFormatFromTemplate(template)
+        return formatter.string(from: date)
+    }
+}
+
 func countWords(_ text: String) -> Int {
     text.split(whereSeparator: { $0.isWhitespace }).count
 }
