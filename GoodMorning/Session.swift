@@ -238,7 +238,8 @@ final class Session {
         streak = store.streak(endingOn: day, wordGoal: wordGoal)
         logNotice = store.logNotice
 
-        if isComplete || loadError != nil {
+        // Done on words with time still to go: back to the full-screen page, unlocked, so the clock runs down to 0.
+        if loadError != nil || isComplete && elapsed >= secondsGoal {
             leaveLockdown()
         } else {
             lockIn()
@@ -559,19 +560,24 @@ final class Session {
 
     // MARK: Lockdown
 
-    /// Lock (again). Does nothing once today's goal is met, while the page couldn't be read,
-    /// or if the lock is already on or on its way.
+    /// Lock (again). Once today's goal is met it brings back the full-screen page, and the clock with it, but not
+    /// the lock: the Dock, menu bar and Cmd-Tab stay. Does nothing while the page couldn't be read,
+    /// or if the page is already full screen or on its way.
     func lockIn() {
-        guard !isComplete, folderURL != nil, loadError == nil, !isLocked, pendingLock == nil else { return }
+        guard folderURL != nil, loadError == nil, !isFullScreen, pendingLock == nil else { return }
         // A short delay lets SwiftUI finish placing the window at launch before we resize it.
         pendingLock = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(250))
             // Before touching pendingLock, so a cancelled lock can't clear a newer one.
             guard !Task.isCancelled, let self else { return }
             self.pendingLock = nil
-            guard let window = self.window, !self.isComplete else { return }
+            guard let window = self.window else { return }
             self.lockdown.engage(window)
-            self.isLocked = true
+            if self.isComplete {
+                self.lockdown.relax()
+            } else {
+                self.isLocked = true
+            }
             self.isFullScreen = true
             self.hasWarnedUnlocked = false
             self.isShowingLockReminder = false

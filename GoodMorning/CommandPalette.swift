@@ -72,8 +72,9 @@ struct CommandPalette: View {
             commands.append(Command(title: "Leave Full Screen", keywords: "exit escape unlock lock out pause", shortcut: "⌘L") {
                 session.leaveLockdown()
             })
-        } else if session.folderURL != nil, !session.isComplete {
-            commands.append(Command(title: "Lock In", keywords: "full screen focus resume start", shortcut: "⌘L") {
+        } else if session.folderURL != nil {
+            commands.append(Command(title: session.isComplete ? "Full Screen" : "Lock In",
+                                    keywords: "full screen lock in focus resume start timer", shortcut: "⌘L") {
                 session.lockIn()
             })
         }
@@ -94,26 +95,25 @@ struct CommandPalette: View {
         commands.append(Command(title: "Default Text Size", keywords: "font size reset actual zoom", shortcut: "⌘0") {
             Prefs.resetFontSize()
         })
-        commands.append(Command(title: "Wider Lines", keywords: "line width column page measure") {
+        commands.append(Command(title: "Wider Lines", keywords: "line width column page measure", shortcut: "⌘]") {
             Prefs.changeLineWidth(by: Prefs.lineWidthStep)
         })
-        commands.append(Command(title: "Narrower Lines", keywords: "line width column page measure") {
+        commands.append(Command(title: "Narrower Lines", keywords: "line width column page measure", shortcut: "⌘[") {
             Prefs.changeLineWidth(by: -Prefs.lineWidthStep)
         })
         commands.append(Command(title: "Typewriter Sound", keywords: "typing keys click clack audio noise",
-                                isChecked: Prefs.typingSound) {
+                                shortcut: "⇧⌘T", isChecked: Prefs.typingSound) {
             Prefs.setTypingSound(!Prefs.typingSound)
         })
         let current = Prefs.appearance
-        for appearance in Appearance.allCases {
+        for (index, appearance) in Appearance.allCases.enumerated() {
             commands.append(Command(title: "Appearance: \(appearance.title)", keywords: "mode theme color night day",
-                                    isChecked: appearance == current) {
-                UserDefaults.standard.set(appearance.rawValue, forKey: Prefs.appearanceKey)
-                appearance.apply()
+                                    shortcut: "⌥⌘\(index + 1)", isChecked: appearance == current) {
+                appearance.choose()
             })
         }
         commands.append(Command(title: session.folderURL == nil ? "Choose Folder…" : "Change Folder…",
-                                keywords: "pages save location obsidian vault") {
+                                keywords: "pages save location obsidian vault open", shortcut: "⌘O") {
             session.chooseFolder()
         })
         commands.append(Command(title: "Settings…", keywords: "preferences goal words minutes login font size line width", shortcut: "⌘,") {
@@ -153,11 +153,10 @@ struct CommandPalette: View {
             HStack {
                 Text(command.title)
                 Spacer()
-                if command.isChecked {
-                    Image(systemName: "checkmark")
-                } else {
-                    Text(command.shortcut).foregroundStyle(.secondary)
-                }
+                Text(command.shortcut).foregroundStyle(.secondary)
+                Image(systemName: "checkmark")
+                    .opacity(command.isChecked ? 1 : 0)
+                    .accessibilityHidden(!command.isChecked)
             }
             .font(.system(size: 13))
             .padding(.horizontal, 10)

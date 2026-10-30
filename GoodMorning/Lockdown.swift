@@ -44,15 +44,19 @@ final class Lockdown {
         NSApp.presentationOptions = Self.relaxed
     }
 
-    /// Back to an ordinary window.
+    /// Back to an ordinary window. Also one that opened screen-sized without the lock (the window keeps its last
+    /// frame, so it does after a quit while locked), which would otherwise look full screen with no way out.
     func release(_ window: NSWindow) {
         NSApp.presentationOptions = []
-        guard isFullScreen else { return }
-        window.styleMask = savedStyle
-        window.isMovable = true
-        setTrafficLightsHidden(false, in: window)
-        window.setFrame(restoredFrame(for: window), display: true, animate: true)
-        isFullScreen = false
+        if isFullScreen {
+            window.styleMask = savedStyle
+            window.isMovable = true
+            setTrafficLightsHidden(false, in: window)
+            window.setFrame(restoredFrame(for: window), display: true, animate: true)
+            isFullScreen = false
+        } else if isScreenSized(window.frame, for: window) {
+            window.setFrame(restoredFrame(for: window), display: true, animate: true)
+        }
     }
 
     /// The whole screen, less the strip beside the camera notch on MacBooks that have one. AppKit won't
@@ -72,9 +76,8 @@ final class Lockdown {
     /// The frame from before the lock, unless that was already screen-sized
     /// (say, the app last quit while locked). Then a comfortable centered window.
     private func restoredFrame(for window: NSWindow) -> NSRect {
-        let visible = (window.screen ?? NSScreen.main)?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
-        if let saved = savedFrame,
-           saved.width < visible.width - 40 || saved.height < visible.height - 40 {
+        let visible = visibleFrame(for: window)
+        if let saved = savedFrame, !isScreenSized(saved, for: window) {
             return saved
         }
         let size = NSSize(width: min(820, visible.width * 0.7), height: min(900, visible.height * 0.85))
@@ -82,5 +85,14 @@ final class Lockdown {
                       y: visible.midY - size.height / 2,
                       width: size.width,
                       height: size.height)
+    }
+
+    private func isScreenSized(_ frame: NSRect, for window: NSWindow) -> Bool {
+        let visible = visibleFrame(for: window)
+        return frame.width >= visible.width - 40 && frame.height >= visible.height - 40
+    }
+
+    private func visibleFrame(for window: NSWindow) -> NSRect {
+        (window.screen ?? NSScreen.main)?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
     }
 }

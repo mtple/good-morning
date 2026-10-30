@@ -18,6 +18,9 @@ struct GoodMorningApp: App {
                     .keyboardShortcut("p")
                 Button("Calendar") { appDelegate.session.toggleCalendar() }
                     .keyboardShortcut("y")
+                Divider()
+                Button("Choose Folder…") { appDelegate.session.chooseFolder() }
+                    .keyboardShortcut("o")
             }
             CommandGroup(replacing: .saveItem) {
                 Button("Save") { appDelegate.session.saveNow() }
@@ -35,7 +38,18 @@ struct GoodMorningApp: App {
                     .keyboardShortcut("0")
                 Divider()
                 Button("Wider Lines") { Prefs.changeLineWidth(by: Prefs.lineWidthStep) }
+                    .keyboardShortcut("]")
                 Button("Narrower Lines") { Prefs.changeLineWidth(by: -Prefs.lineWidthStep) }
+                    .keyboardShortcut("[")
+                Divider()
+                Button("Typewriter Sound") { Prefs.setTypingSound(!Prefs.typingSound) }
+                    .keyboardShortcut("t", modifiers: [.command, .shift])
+                Divider()
+                // ⌥⌘1–3, since ⇧⌘3 is the system's screenshot.
+                ForEach(Array(Appearance.allCases.enumerated()), id: \.element) { index, appearance in
+                    Button("Appearance: \(appearance.title)") { appearance.choose() }
+                        .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: [.command, .option])
+                }
             }
             CommandGroup(replacing: .help) {
                 Button("How Good Morning Works") { appDelegate.session.toggleHelp() }

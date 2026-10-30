@@ -12,13 +12,18 @@ struct EditorView: NSViewRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator(onChange: onChange) }
 
     func makeNSView(context: Context) -> NSScrollView {
-        let scrollView = PageTextView.scrollableTextView()
+        // AppKit's own set-up for a scrolling text view, moved into a scroll view that keeps to the slim scroller.
+        let made = PageTextView.scrollableTextView()
+        let scrollView = PageScrollView(frame: made.frame)
         scrollView.drawsBackground = false
+        scrollView.borderType = .noBorder
+        scrollView.verticalScroller = PageScroller()
         scrollView.hasVerticalScroller = true
         scrollView.autohidesScrollers = true
         scrollView.scrollerStyle = .overlay
 
-        guard let textView = scrollView.documentView as? PageTextView else { return scrollView }
+        guard let textView = made.documentView as? PageTextView else { return made }
+        scrollView.documentView = textView
         textView.placeholder = "Just start typing. Whatever's on your mind counts."
         textView.delegate = context.coordinator
         textView.drawsBackground = false
@@ -149,6 +154,15 @@ final class PageTextView: NSTextView {
         NSAttributedString(string: placeholder, attributes: attributes).draw(in: rect)
     }
 
+    /// A slim caret the height of the letters, not of the whole airy line, which is half as tall again.
+    /// The line's extra height sits above the letters, so the caret keeps to the bottom of the line.
+    override func drawInsertionPoint(in rect: NSRect, color: NSColor, turnedOn flag: Bool) {
+        let font = Typography.font(size: fontSize)
+        let height = min(rect.height, (font.ascender - font.descender).rounded(.up))
+        let caret = NSRect(x: rect.minX, y: rect.maxY - height, width: 1.5, height: height)
+        super.drawInsertionPoint(in: caret, color: color, turnedOn: flag)
+    }
+
     override func keyDown(with event: NSEvent) {
         if let stroke = Typewriter.stroke(for: event) { Typewriter.shared.play(stroke) }
         super.keyDown(with: event)
@@ -194,6 +208,60 @@ final class PageTextView: NSTextView {
         guard onScreen != .zero else { return nil }
         return convert(window.convertFromScreen(onScreen), from: nil)
     }
+}
+
+/// Always the overlay kind of scroller, even with a mouse plugged in, so the page never gets a scroll bar
+/// track down its side, ruled off from the margin.
+final class PageScrollView: NSScrollView {
+    override var scrollerStyle: NSScroller.Style {
+        get { super.scrollerStyle }
+        set { super.scrollerStyle = .overlay }
+    }
+}
+
+/// A slim ember pill and nothing behind it: no track, no edge. It shows while the page scrolls and fills out
+/// a little under the pointer.
+final class PageScroller: NSScroller {
+    private var isHovering = false {
+        didSet { if isHovering != oldValue { needsDisplay = true } }
+    }
+    private var hoverArea: NSTrackingArea?
+
+    override class var isCompatibleWithOverlayScrollers: Bool { true }
+
+    override func drawKnobSlot(in slotRect: NSRect, highlight flag: Bool) {}
+
+    override func drawKnob() {
+        let slot = rect(for: .knob)
+        guard !slot.isEmpty else { return }
+        let width: CGFloat = isHovering ? 5 : 3
+        let knob = NSRect(x: bounds.maxX - width - 4, y: slot.minY + 3, width: width, height: max(width, slot.height - 6))
+        NSColor.ember.withAlphaComponent(isHovering ? 0.65 : 0.4).setFill()
+        NSBezierPath(roundedRect: knob, xRadius: width / 2, yRadius: width / 2).fill()
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        guard hoverArea == nil else { return }  // .inVisibleRect keeps it the right size
+        let area = NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self)
+        addTrackingArea(area)
+        hoverArea = area
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        super.mouseEntered(with: event)
+        isHovering = true
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        super.mouseExited(with: event)
+        isHovering = false
+    }
+}
+
+extension NSColor {
+    /// The deep orange at the foot of the margins, for the page's own controls.
+    static let ember = NSColor(red: 0.78, green: 0.45, blue: 0.30, alpha: 1)
 }
 
 enum Typography {

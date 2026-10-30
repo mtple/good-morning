@@ -41,6 +41,11 @@ struct ContentView: View {
                     // Under the text, where the eye is, not out in the corners of a full-screen page.
                     StatusBar(session: session)
                         .frame(maxWidth: column)
+                    if session.loadError == nil {
+                        WidthSlider(width: $lineWidth)
+                            .padding(.top, -6)
+                            .padding(.bottom, 10)
+                    }
                 }
                 .ignoresSafeArea(edges: .top)
             } else {
@@ -117,8 +122,8 @@ private struct StatusBar: View {
             } else {
                 Text(clockText)
             }
-            if !session.isComplete, !session.isFullScreen, session.loadError == nil {  // no locking in to a page that isn't there
-                Button("Lock in") { session.lockIn() }
+            if !session.isFullScreen, session.loadError == nil {  // no locking in to a page that isn't there
+                Button(session.isComplete ? "Full screen" : "Lock in") { session.lockIn() }
                     .buttonStyle(.link)
                     .help("Command-L")
             }
@@ -223,6 +228,56 @@ private struct StatusBarLayout: Layout {
                      proposal: ProposedViewSize(width: width, height: nil))
         right.place(at: CGPoint(x: bounds.maxX, y: bounds.midY), anchor: .trailing,
                     proposal: ProposedViewSize(width: rightWidth, height: nil))
+    }
+}
+
+/// The width of the text column, as a slim track under the status bar, a sideways twin of the page's scroller.
+/// Drag or click along it; double-click for the default width.
+private struct WidthSlider: View {
+    @Binding var width: Double
+
+    @State private var isHovering = false
+    @GestureState private var isDragging = false
+
+    private let length: CGFloat = 120
+    private let knob: CGFloat = 20
+    private let range = Prefs.lineWidths
+
+    var body: some View {
+        let isActive = isHovering || isDragging
+        ZStack(alignment: .leading) {
+            Capsule()
+                .fill(.primary.opacity(isActive ? 0.1 : 0.05))
+                .frame(height: 2)
+            Capsule()
+                .fill(Color.ember.opacity(isActive ? 0.65 : 0.4))
+                .frame(width: knob, height: isActive ? 5 : 3)
+                .offset(x: (length - knob) * fraction)
+        }
+        .frame(width: length, height: 14)
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture(minimumDistance: 0)
+                .updating($isDragging) { _, dragging, _ in dragging = true }
+                .onChanged { set(at: $0.location.x) }
+        )
+        .simultaneousGesture(TapGesture(count: 2).onEnded { width = Prefs.defaultLineWidth })
+        .onHover { isHovering = $0 }
+        .animation(.easeOut(duration: 0.15), value: isActive)
+        .help("Line width")
+        .accessibilityRepresentation {
+            Slider(value: $width, in: range, step: Prefs.lineWidthStep) { Text("Line width") }
+        }
+    }
+
+    private var fraction: CGFloat {
+        CGFloat((width.clamped(to: range) - range.lowerBound) / (range.upperBound - range.lowerBound))
+    }
+
+    /// The knob's middle goes under the pointer.
+    private func set(at x: CGFloat) {
+        let along = Double(min(1, max(0, (x - knob / 2) / (length - knob))))
+        width = (range.lowerBound + along * (range.upperBound - range.lowerBound)).rounded()
     }
 }
 
@@ -380,7 +435,7 @@ private struct WordBands: View {
 }
 
 /// The time as sand: thirty solid grains in a column three wide, one for each thirtieth of the goal,
-/// filling the top half to start. A bar across the middle lets them through only on the right.
+/// filling the top half to start. A bar across the middle holds them up, and slides aside on the right to let each one through.
 /// Drawn from `Sandglass`, which works out where every grain is.
 private struct SandColumn: View {
     let elapsed: Double  // seconds on the page today
@@ -411,14 +466,16 @@ private struct SandColumn: View {
                     context.stroke(dot(CGFloat(column), CGFloat(row)), with: .color(.primary.opacity(0.1)), lineWidth: 1)
                 }
             }
-            // The bar: across the left and middle columns, open over the right.
-            let left = x(0) - Self.diameter / 2 - 3, right = x(1) + Self.diameter / 2
+            let (places, gate) = Sandglass.places(elapsed: elapsed, goal: goal, pitch: pitch, calm: reduceMotion)
+
+            // The bar: all the way across, sliding back off the right column while a grain drops through.
+            let left = x(0) - Self.diameter / 2 - 3, closed = x(2) + Self.diameter / 2 + 3, open = x(1) + Self.diameter / 2
+            let right = closed - (closed - open) * gate
             let bar = CGRect(x: left, y: CGFloat(Sandglass.depth) * pitch + (Self.barGap - Self.barThickness) / 2,
                              width: right - left, height: Self.barThickness)
             context.fill(Path(roundedRect: bar, cornerRadius: Self.barThickness / 2), with: .color(.primary.opacity(0.32)))
 
-            for place in Sandglass.places(elapsed: elapsed, goal: goal, pitch: pitch, calm: reduceMotion)
-            where place.amount > 0 {
+            for place in places where place.amount > 0 {
                 let height = 1 - Double(y(place.row) / size.height)
                 context.fill(dot(place.column, place.row),
                              with: .color(dawn(at: min(1, max(0, height))).opacity(place.amount)))
@@ -429,7 +486,7 @@ private struct SandColumn: View {
 
 /// Where the sand is at any moment. Columns are 0 (left), 1 (middle) and 2 (right). Rows run from 0 at
 /// the top; the top half is rows 0 to 9, with the neck at 9, and the bottom half rows 10 to 19. A bar
-/// between the halves covers the left and middle columns, so grains get through only on the right.
+/// between the halves holds them up. It slides back off the right column to let each grain through, then closes again.
 ///
 /// In each stretch the lowest grain over the opening drops through under gravity, bounces off the pile with
 /// most of its speed lost, and rolls left while there's a lower column further left. The column above the
@@ -439,11 +496,13 @@ private struct SandColumn: View {
 private enum Sandglass {
     static let grains = 30
     static let depth = 10  // rows in each half
-    static let opening = 2  // the column the bar is open over
+    static let opening = 2  // the column the bar slides open over
     static let gravity = 2400.0  // points per second squared
     static let restitution = 0.3  // how much of its speed a grain keeps on each bounce
     static let rollTime = 0.3
     static let slideTime = 0.35
+    static let gateOpenTime = 0.25  // the bar sliding open, just before a grain drops
+    static let gateCloseTime = 0.3  // and sliding shut, once it's through
 
     struct Place {
         var column: CGFloat
@@ -465,18 +524,20 @@ private enum Sandglass {
         let row: Int
     }
 
-    static func places(elapsed: Double, goal: Double, pitch: CGFloat, calm: Bool) -> [Place] {
+    /// Every grain's place, and how far open the bar is (0 shut, 1 open over the right column).
+    static func places(elapsed: Double, goal: Double, pitch: CGFloat, calm: Bool) -> (places: [Place], gate: Double) {
         let stretch = goal / Double(grains)
         let progress = max(0, elapsed / stretch)
         let current = min(grains, Int(progress.rounded(.down)))  // the grain on the move
         let into = (progress - Double(current)) * stretch  // seconds into its stretch
-        if calm { return calmPlaces(current: current, moved: current < grains ? into / stretch : 0) }
+        if calm { return (calmPlaces(current: current, moved: current < grains ? into / stretch : 0), 0) }
 
         // Replay every trip so far to see how the heaps stand, then work out the one under way.
         var top = [depth, depth, depth], bottom = [0, 0, 0]
         for k in 0..<current { _ = trip(of: k, top: &top, bottom: &bottom, stretch: stretch, pitch: pitch) }
         let before = (top: top, bottom: bottom)
-        let moves = current < grains ? trip(of: current, top: &top, bottom: &bottom, stretch: stretch, pitch: pitch) : []
+        let (moves, drop) = current < grains
+            ? trip(of: current, top: &top, bottom: &bottom, stretch: stretch, pitch: pitch) : ([], -.infinity)
 
         let moving = Set(moves.map { Slot(column: Int($0[0].from.column), row: Int($0[0].from.row)) })
         var out: [Place] = []
@@ -489,18 +550,31 @@ private enum Sandglass {
             }
         }
         for legs in moves { out.append(position(of: legs, at: into)) }
-        return out
+        return (out, gate(at: into, drop: drop, pitch: pitch))
+    }
+
+    /// Opens over the moment before the grain lets go, stays open until it's below the bar, then shuts.
+    private static func gate(at t: Double, drop: Double, pitch: CGFloat) -> Double {
+        let opening = (t - drop + gateOpenTime) / gateOpenTime
+        let closing = 1 - (t - drop - passTime(pitch: pitch)) / gateCloseTime
+        let u = min(1, max(0, min(opening, closing)))
+        return u * u * (3 - 2 * u)  // eases in and out
+    }
+
+    /// How long a dropping grain takes to clear the bar: a row and a half of falling.
+    private static func passTime(pitch: CGFloat) -> Double {
+        (3 * Double(pitch) / gravity).squareRoot()
     }
 
     /// Grain `k`'s trip, worked out from the heaps as they stand, which it moves on to how they'll be after it.
-    /// Each inner list is one grain's legs.
+    /// Each inner list is one grain's legs. `drop` is when the grain lets go through the bar.
     private static func trip(of k: Int, top: inout [Int], bottom: inout [Int], stretch: Double,
-                             pitch: CGFloat) -> [[Leg]] {
+                             pitch: CGFloat) -> (moves: [[Leg]], drop: Double) {
         let neck = CGFloat(depth - 1), floor = CGFloat(depth * 2 - 1)
         func topRow(_ column: Int) -> CGFloat { neck - CGFloat(top[column]) + 1 }  // its highest grain
         var moves: [[Leg]] = []
-        let busy = 2.6  // the longest a trip takes, give or take
-        var t = stretch > busy ? (stretch - busy) * (0.05 + 0.9 * noise(k, 2)) : 0
+        let busy = 3.2  // the longest a trip takes, give or take
+        var t = stretch > busy ? (stretch - busy) * (0.05 + 0.9 * noise(k, 2)) + gateOpenTime : 0
 
         // The opening has run dry: the nearest grain rolls along the bar to it first, then drops through.
         var legs: [Leg] = []
@@ -530,10 +604,11 @@ private enum Sandglass {
         bottom[at] += 1
         moves.append(legs)
 
-        // The column over the opening drops a place after it.
-        var settled = t
+        // The column over the opening drops a place after it, once the bar has shut under it.
+        let shut = t + passTime(pitch: pitch) + gateCloseTime
+        var settled = shut
         for i in 0..<top[opening] {
-            let leg = fall(column: CGFloat(opening), from: neck - CGFloat(i) - 1, to: neck - CGFloat(i), at: t, pitch: pitch)
+            let leg = fall(column: CGFloat(opening), from: neck - CGFloat(i) - 1, to: neck - CGFloat(i), at: shut, pitch: pitch)
             moves.append([leg])
             settled = max(settled, leg.end)
         }
@@ -548,7 +623,7 @@ private enum Sandglass {
         }
         if top[opening] < max(top[0], top[1]) - 1 { slide(from: 1) }
         if top[1] < top[0] - 1 { slide(from: 0) }
-        return moves
+        return (moves, t)
     }
 
     /// A drop from row `r0` to `r1` under gravity, then bounces, each keeping `restitution` of the speed,
@@ -674,13 +749,13 @@ private struct HelpCard: View {
                 .font(.system(size: 20, design: .serif))
             VStack(alignment: .leading, spacing: 8) {
                 point("Write until you reach \(session.wordGoal.formatted()) words or spend \(Prefs.minuteGoal) minutes on the page, whichever comes first.")
-                point("Bands of warm colour build up in the left margin as you write. On the right, sand drops through a gap in a bar as the minutes pass, until the top is empty and the bottom is full.")
+                point("Bands of warm colour build up in the left margin as you write. On the right, a bar slides aside to let a grain of sand drop through as the minutes pass, until the top is empty and the bottom is full.")
                 point("While you write, the page fills the screen and the Dock, menu bar and Cmd-Tab are switched off.")
-                point("Esc steps out and pauses the timer. ⌘L locks you back in, or steps out. The timer only runs while the page is full screen and Good Morning is in front.")
+                point("Esc steps out and pauses the timer. ⌘L locks you back in, or steps out. The timer only runs while the page is full screen and Good Morning is in front. Done on words with time left, the page opens full screen (unlocked) so the timer runs down to 0.")
                 point("Reaching a goal plays a chime, counts the day toward your streak, and gives back the Dock and Cmd-Tab.")
                 point("Click your streak, or press ⌘Y, for a calendar of the days you've written.")
                 point("Your page saves itself every few seconds as a plain markdown file, one per day, in \(folder).")
-                point("⌘+ and ⌘− change the text size. ⌘P shows every command, like dark mode, a wider page or a typewriter sound. ⌘, opens Settings.")
+                point("⌘+ and ⌘− change the text size, ⌘[ and ⌘] the page width. ⌥⌘1, 2 and 3 pick system, light or dark, and ⇧⌘T turns the typewriter sound on or off. ⌘P shows every command with its shortcut. ⌘, opens Settings.")
             }
             .foregroundStyle(.secondary)
             HStack {
@@ -736,6 +811,8 @@ private struct WindowReader: NSViewRepresentable {
 }
 
 extension Color {
+    static let ember = Color(nsColor: .ember)
+
     /// Warm off-white by day, warm near-black by night.
     static let paper = Color(nsColor: NSColor(name: nil) { appearance in
         appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua

@@ -77,6 +77,12 @@ enum Appearance: String, CaseIterable {
         }
     }
 
+    /// Remembered, then applied.
+    @MainActor func choose() {
+        UserDefaults.standard.set(rawValue, forKey: Prefs.appearanceKey)
+        apply()
+    }
+
     /// Set app-wide, so Settings and the folder picker match the page.
     @MainActor func apply() {
         NSApp.appearance = switch self {
