@@ -108,7 +108,7 @@ struct CommandPalette: View {
         let current = Prefs.appearance
         for (index, appearance) in Appearance.allCases.enumerated() {
             commands.append(Command(title: "Appearance: \(appearance.title)", keywords: "mode theme color night day",
-                                    shortcut: "⌥⌘\(index + 1)", isChecked: appearance == current) {
+                                    shortcut: "⌘\(index + 1)", isChecked: appearance == current) {
                 appearance.choose()
             })
         }

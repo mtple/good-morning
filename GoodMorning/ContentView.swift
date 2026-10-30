@@ -342,12 +342,14 @@ private struct Margins: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    private static let textInset: CGFloat = 37  // the editor's 32 pt inset plus 5 pt line padding, as in the status bar
+
     var body: some View {
         GeometryReader { geo in
             let side = (geo.size.width - column) / 2
             if side >= 96 {
-                // Halfway out into the margin, but not so far that it leaves the page behind.
-                let inset = min(side / 2, 150)
+                // Halfway between the screen's edge and the text, which sits in from the column's edge.
+                let middle = (side + Self.textInset) / 2
                 let height = min(geo.size.height * 0.5, 420)
                 let y = geo.size.height / 2
 
@@ -357,7 +359,7 @@ private struct Margins: View {
                     .accessibilityElement()
                     .accessibilityLabel("Words")
                     .accessibilityValue("\(session.wordCount) of \(session.wordGoal)")
-                    .position(x: side - inset, y: y)
+                    .position(x: middle, y: y)
 
                 Group {
                     if session.isTimerRunning, !reduceMotion {
@@ -374,7 +376,7 @@ private struct Margins: View {
                 .accessibilityElement()
                 .accessibilityLabel("Time")
                 .accessibilityValue(minutesText)
-                .position(x: geo.size.width - side + inset, y: y)
+                .position(x: geo.size.width - middle, y: y)
             }
         }
         .ignoresSafeArea()
@@ -755,7 +757,7 @@ private struct HelpCard: View {
                 point("Reaching a goal plays a chime, counts the day toward your streak, and gives back the Dock and Cmd-Tab.")
                 point("Click your streak, or press ⌘Y, for a calendar of the days you've written.")
                 point("Your page saves itself every few seconds as a plain markdown file, one per day, in \(folder).")
-                point("⌘+ and ⌘− change the text size, ⌘[ and ⌘] the page width. ⌥⌘1, 2 and 3 pick system, light or dark, and ⇧⌘T turns the typewriter sound on or off. ⌘P shows every command with its shortcut. ⌘, opens Settings.")
+                point("⌘+ and ⌘− change the text size, ⌘[ and ⌘] the page width. ⌘1, 2 and 3 pick system, light or dark, and ⇧⌘T turns the typewriter sound on or off. ⌘P shows every command with its shortcut. ⌘, opens Settings.")
             }
             .foregroundStyle(.secondary)
             HStack {

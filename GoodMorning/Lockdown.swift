@@ -18,6 +18,7 @@ final class Lockdown {
     private(set) var isFullScreen = false
     private var savedFrame: NSRect?
     private var savedStyle: NSWindow.StyleMask = []
+    private var backdrop: NSWindow?
 
     /// Fill the screen and lock.
     func engage(_ window: NSWindow) {
@@ -33,6 +34,7 @@ final class Lockdown {
         setTrafficLightsHidden(true, in: window)
         if let screen = window.screen ?? NSScreen.main {
             window.setFrame(lockedFrame(on: screen), display: true)
+            showBackdrop(behind: window, on: screen)
         }
         window.makeKeyAndOrderFront(nil)
         isFullScreen = true
@@ -52,6 +54,7 @@ final class Lockdown {
             window.styleMask = savedStyle
             window.isMovable = true
             setTrafficLightsHidden(false, in: window)
+            hideBackdrop(from: window)
             window.setFrame(restoredFrame(for: window), display: true, animate: true)
             isFullScreen = false
         } else if isScreenSized(window.frame, for: window) {
@@ -65,6 +68,25 @@ final class Lockdown {
         var frame = screen.frame
         frame.size.height -= screen.safeAreaInsets.top
         return frame
+    }
+
+    /// Black behind the page, over the whole screen, the way native full screen does it: it fills the strip beside
+    /// the notch, where the desktop would otherwise show above the page, and the window's rounded corners.
+    /// A borderless window, unlike the page's, is allowed up into that strip.
+    private func showBackdrop(behind window: NSWindow, on screen: NSScreen) {
+        let backdrop = self.backdrop ?? NSWindow(contentRect: screen.frame, styleMask: .borderless, backing: .buffered, defer: false)
+        backdrop.isReleasedWhenClosed = false
+        backdrop.backgroundColor = .black
+        backdrop.ignoresMouseEvents = true
+        backdrop.setFrame(screen.frame, display: false)
+        window.addChildWindow(backdrop, ordered: .below)
+        self.backdrop = backdrop
+    }
+
+    private func hideBackdrop(from window: NSWindow) {
+        guard let backdrop else { return }
+        window.removeChildWindow(backdrop)
+        backdrop.orderOut(nil)
     }
 
     private func setTrafficLightsHidden(_ hidden: Bool, in window: NSWindow) {
