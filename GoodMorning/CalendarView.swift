@@ -1,9 +1,8 @@
 import SwiftUI
 
 /// ⌘Y: a month of days at a glance. A filled day counted toward the streak, a ringed one has some writing,
-/// and today has a line under it. Hover a day for its words and time. ← and → step through the months.
-///
-/// Only how much you wrote, never what: morning pages aren't for rereading.
+/// and today has a line under it. Hover a day for its words and time, click it to read its page.
+/// ← and → step through the months.
 struct CalendarCard: View {
     let session: Session
 
@@ -106,7 +105,7 @@ struct CalendarCard: View {
                     ForEach(Array(week.enumerated()), id: \.offset) { _, day in
                         if let day {
                             DayCell(day: day, summary: summaries[day], isToday: day == today,
-                                    isFuture: day.date > today.date)
+                                    isFuture: day.date > today.date, open: { session.openDay(day) })
                         } else {
                             Color.clear.frame(height: 36)
                         }
@@ -139,8 +138,19 @@ struct CalendarCard: View {
         let summary: JournalStore.DaySummary?
         let isToday: Bool
         let isFuture: Bool
+        let open: () -> Void
+
+        @State private var isHovering = false
 
         var body: some View {
+            Button(action: open) { label }
+                .buttonStyle(.plain)
+                .disabled(isFuture)  // nothing written there yet
+                .onHover { isHovering = $0 && !isFuture }
+                .help(detail)
+        }
+
+        private var label: some View {
             Text("\(day.dayOfMonth)")
                 .monospacedDigit()
                 .foregroundStyle(counts ? AnyShapeStyle(Color.white) : isFuture ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.primary))
@@ -150,6 +160,8 @@ struct CalendarCard: View {
                         Circle().fill(Color.accentColor.opacity(0.85))
                     } else if isWritten {
                         Circle().strokeBorder(Color.accentColor.opacity(0.6), lineWidth: 1.5)
+                    } else if isHovering {
+                        Circle().fill(.primary.opacity(0.06))
                     }
                 }
                 .overlay(alignment: .bottom) {
@@ -163,7 +175,7 @@ struct CalendarCard: View {
                 .frame(height: 36)
                 .frame(maxWidth: .infinity)
                 .contentShape(Rectangle())
-                .help(detail)
+                .brightness(isHovering && isWritten ? 0.08 : 0)
         }
 
         private var counts: Bool { summary?.counts == true }

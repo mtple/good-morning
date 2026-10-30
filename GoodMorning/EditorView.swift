@@ -7,6 +7,8 @@ struct EditorView: NSViewRepresentable {
     var text: String
     var fontSize = Prefs.defaultFontSize
     var isFocused = true  // false while the command palette is up
+    var isEditable = true  // false for an earlier day's page, opened from the calendar to read
+    var placeholder = "Just start typing. Whatever's on your mind counts."
     var onChange: @MainActor (String) -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator(onChange: onChange) }
@@ -24,7 +26,8 @@ struct EditorView: NSViewRepresentable {
 
         guard let textView = made.documentView as? PageTextView else { return made }
         scrollView.documentView = textView
-        textView.placeholder = "Just start typing. Whatever's on your mind counts."
+        textView.placeholder = placeholder
+        textView.isEditable = isEditable
         textView.delegate = context.coordinator
         textView.drawsBackground = false
         textView.isRichText = false
@@ -164,7 +167,7 @@ final class PageTextView: NSTextView {
     }
 
     override func keyDown(with event: NSEvent) {
-        if let stroke = Typewriter.stroke(for: event) { Typewriter.shared.play(stroke) }
+        if isEditable, let stroke = Typewriter.stroke(for: event) { Typewriter.shared.play(stroke) }
         super.keyDown(with: event)
     }
 

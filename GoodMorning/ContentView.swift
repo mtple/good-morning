@@ -22,6 +22,18 @@ struct ContentView: View {
                         // No editor until the page can be read, so nothing typed here can replace it.
                         UnreadablePage(error: loadError, reveal: session.canRevealPage ? { session.revealPage() } : nil,
                                        chooseFolder: { session.chooseFolder() })
+                    } else if let past = session.pastPage {
+                        EditorView(text: past.text, fontSize: fontSize.clamped(to: Prefs.fontSizes),
+                                   isFocused: !session.isShowingCard, isEditable: false,
+                                   placeholder: past.error ?? "Nothing written this day.",
+                                   onChange: { _ in })
+                            .id(past.day)  // a fresh page for each day, never today's text view
+                            .overlay(alignment: .top) {
+                                PastPageBanner(day: past.day, back: { session.closePastPage() })
+                                    .padding(.top, 18)
+                            }
+                            .frame(maxWidth: column)
+                            .frame(maxWidth: .infinity)
                     } else {
                         EditorView(text: session.text, fontSize: fontSize.clamped(to: Prefs.fontSizes),
                                    isFocused: !session.isShowingCard,
@@ -137,7 +149,9 @@ private struct StatusBar: View {
     }
 
     @ViewBuilder private var center: some View {
-        if let error = session.errorMessage {
+        if let past = session.pastPage {
+            Text("\(past.wordCount.formatted()) \(past.wordCount == 1 ? "word" : "words")")
+        } else if let error = session.errorMessage {
             Text(error)
                 .foregroundStyle(.red)
                 .help(error)  // the bar may cut it short
@@ -179,6 +193,27 @@ private struct StatusBar: View {
     private var clockText: String {
         let seconds = session.secondsLeft > 0 ? session.secondsLeft : session.elapsedNow
         return String(format: "%d:%02d", seconds / 60, seconds % 60)
+    }
+}
+
+/// Over an earlier day's page: whose page it is, and the way back to today's.
+private struct PastPageBanner: View {
+    let day: Day
+    let back: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Text(day.formatted("EEEEMMMMd"))
+                .foregroundStyle(.secondary)
+            Button("Back to today", action: back)
+                .buttonStyle(.link)
+                .help("Esc")
+        }
+        .font(.system(size: 12))
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(.regularMaterial, in: Capsule())
+        .overlay(Capsule().strokeBorder(.separator))
     }
 }
 
@@ -755,7 +790,7 @@ private struct HelpCard: View {
                 point("While you write, the page fills the screen and the Dock, menu bar and Cmd-Tab are switched off.")
                 point("Esc steps out and pauses the timer. ⌘L locks you back in, or steps out. The timer only runs while the page is full screen and Good Morning is in front. Done on words with time left, the page opens full screen (unlocked) so the timer runs down to 0.")
                 point("Reaching a goal plays a chime, counts the day toward your streak, and gives back the Dock and Cmd-Tab.")
-                point("Click your streak, or press ⌘Y, for a calendar of the days you've written.")
+                point("Click your streak, or press ⌘Y, for a calendar of the days you've written. Click a day to read its page.")
                 point("Your page saves itself every few seconds as a plain markdown file, one per day, in \(folder).")
                 point("⌘+ and ⌘− change the text size, ⌘[ and ⌘] the page width. ⌘1, 2 and 3 pick system, light or dark, and ⇧⌘T turns the typewriter sound on or off. ⌘P shows every command with its shortcut. ⌘, opens Settings.")
             }

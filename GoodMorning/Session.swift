@@ -33,6 +33,15 @@ final class Session {
     private(set) var pageSaves = 0         // goes up each time the page reaches disk, for the "Saved" indicator
     private(set) var celebrations = 0      // goes up each time a goal is reached, for its little animation
     private(set) var isShowingLockReminder = false  // you typed outside the lock: a banner offers to lock in
+    private(set) var pastPage: PastPage?   // an earlier day's page, opened from the calendar to read, in place of today's
+
+    /// An earlier day's page, read-only. Today's stays as it is underneath, still saved, and comes back on Esc.
+    struct PastPage: Equatable {
+        let day: Day
+        let text: String
+        let error: String?  // it couldn't be read
+        var wordCount: Int { countWords(text) }
+    }
 
     /// The problem to show, most serious first.
     var errorMessage: String? { loadError ?? saveError ?? logNotice }
@@ -229,6 +238,7 @@ final class Session {
         wordCount = countWords(text)
         textDirty = false
         isShowingLockReminder = false
+        pastPage = nil
         pageProblem = nil  // only reached once the last page was saved or copied aside
         let record = store.record(for: day)
         runningSince = nil
@@ -476,11 +486,11 @@ final class Session {
         runningSince = since + .seconds(seconds)
     }
 
-    /// The timer runs only while the page is full screen, the app is frontmost, and the screen is awake,
-    /// unlocked and yours. Esc pauses it.
+    /// The timer runs only while today's page is full screen, the app is frontmost, and the screen is awake,
+    /// unlocked and yours. Esc pauses it, and so does reading an earlier day's page.
     private func updateClock(isActive: Bool? = nil) {
         bankTime()
-        if isFullScreen, isActive ?? NSApp.isActive, awayReasons.isEmpty {
+        if isFullScreen, pastPage == nil, isActive ?? NSApp.isActive, awayReasons.isEmpty {
             if runningSince == nil { runningSince = .now }
         } else {
             runningSince = nil
@@ -652,7 +662,27 @@ final class Session {
         isShowingCalendar = false
     }
 
-    /// One tap of Esc closes the command palette, help or the calendar if one is up, or else leaves the full-screen page,
+    /// A day clicked in the calendar. An earlier one opens to read in place of today's page; today brings today's back.
+    func openDay(_ other: Day) {
+        hideCalendar()
+        guard other.date < day.date else { return closePastPage() }
+        do {
+            pastPage = PastPage(day: other, text: try store.read(other), error: nil)
+        } catch {
+            pastPage = PastPage(day: other, text: "", error: "Couldn't open \(other.key).md: \(error.localizedDescription)")
+        }
+        updateClock()
+    }
+
+    /// Back to today's page, and its clock.
+    func closePastPage() {
+        guard pastPage != nil else { return }
+        pastPage = nil
+        updateClock()
+    }
+
+    /// One tap of Esc closes the command palette, help or the calendar if one is up, or an earlier day's page for
+    /// today's, or else leaves the full-screen page,
     /// locked or not, or calls off a lock that's on its way. Elsewhere Esc is swallowed, so the text view doesn't
     /// pop up its word-completion list.
     ///
@@ -684,6 +714,8 @@ final class Session {
             hideHelp()
         } else if isShowingCalendar {
             hideCalendar()
+        } else if pastPage != nil {
+            closePastPage()
         } else if isFullScreen || pendingLock != nil {
             leaveLockdown()
         } else if isShowingLockReminder {
