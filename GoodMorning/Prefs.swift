@@ -8,6 +8,7 @@ enum Prefs {
     static let fontSizeKey = "fontSize"
     static let lineWidthKey = "lineWidth"
     static let typingSoundKey = "typingSound"
+    static let recentCommandsKey = "recentCommands"
 
     static let defaultWordGoal = 750
     static let defaultMinuteGoal = 30
@@ -23,6 +24,7 @@ enum Prefs {
     static var fontSize: Double { clamped(fontSizeKey, to: fontSizes, or: defaultFontSize) }
     static var lineWidth: Double { clamped(lineWidthKey, to: lineWidths, or: defaultLineWidth) }
     static var typingSound: Bool { UserDefaults.standard.bool(forKey: typingSoundKey) }  // off unless turned on
+    static var recentCommands: [String] { UserDefaults.standard.stringArray(forKey: recentCommandsKey) ?? [] }
 
     /// ⌘+ and ⌘−.
     static func changeFontSize(by step: Double) {
@@ -36,6 +38,12 @@ enum Prefs {
 
     static func changeLineWidth(by step: Double) {
         UserDefaults.standard.set((lineWidth + step).clamped(to: lineWidths), forKey: lineWidthKey)
+    }
+
+    /// The command palette lists the last few commands run from it first, most recent at the top.
+    static func noteRecentCommand(_ id: String) {
+        let recent = [id] + recentCommands.filter { $0 != id }
+        UserDefaults.standard.set(Array(recent.prefix(5)), forKey: recentCommandsKey)
     }
 
     /// Turning it on plays a key, so you hear what you chose.

@@ -11,7 +11,7 @@ struct CommandPalette: View {
     @FocusState private var isFocused: Bool
 
     var body: some View {
-        let matches = commands.filter { $0.matches(query) }
+        let matches = recentFirst(commands).filter { $0.matches(query) }
         VStack(alignment: .leading, spacing: 0) {
             TextField("Type a command, like “dark”", text: $query)
                 .textFieldStyle(.plain)
@@ -69,11 +69,11 @@ struct CommandPalette: View {
     private var commands: [Command] {
         var commands: [Command] = []
         if session.isFullScreen {
-            commands.append(Command(title: "Leave Full Screen", keywords: "exit escape unlock lock out pause", shortcut: "⌘L") {
+            commands.append(Command(id: "lock", title: "Leave Full Screen", keywords: "exit escape unlock lock out pause", shortcut: "⌘L") {
                 session.leaveLockdown()
             })
         } else if session.folderURL != nil {
-            commands.append(Command(title: session.isComplete ? "Full Screen" : "Lock In",
+            commands.append(Command(id: "lock", title: session.isComplete ? "Full Screen" : "Lock In",
                                     keywords: "full screen lock in focus resume start timer", shortcut: "⌘L") {
                 session.lockIn()
             })
@@ -112,7 +112,7 @@ struct CommandPalette: View {
                 appearance.choose()
             })
         }
-        commands.append(Command(title: session.folderURL == nil ? "Choose Folder…" : "Change Folder…",
+        commands.append(Command(id: "folder", title: session.folderURL == nil ? "Choose Folder…" : "Change Folder…",
                                 keywords: "pages save location obsidian vault open", shortcut: "⌘O") {
             session.chooseFolder()
         })
@@ -125,18 +125,37 @@ struct CommandPalette: View {
         return commands
     }
 
+    /// The last few commands run from here come first, most recent at the top, then the rest in their usual order.
+    private func recentFirst(_ commands: [Command]) -> [Command] {
+        let recent = Prefs.recentCommands
+        let used = recent.compactMap { id in commands.first { $0.id == id } }
+        return used + commands.filter { !recent.contains($0.id) }
+    }
+
     private func run(_ command: Command) {
+        Prefs.noteRecentCommand(command.id)
         session.hideCommands()
         // On the next turn of the run loop, so a folder picker or Settings opens over the page, not the palette.
         Task { command.action() }
     }
 
     private struct Command {
+        var id: String  // stays the same when the title changes with the state, like Lock In and Leave Full Screen
         let title: String
         var keywords = ""
         var shortcut = ""
         var isChecked = false
         let action: () -> Void
+
+        init(id: String? = nil, title: String, keywords: String = "", shortcut: String = "", isChecked: Bool = false,
+             action: @escaping () -> Void) {
+            self.id = id ?? title
+            self.title = title
+            self.keywords = keywords
+            self.shortcut = shortcut
+            self.isChecked = isChecked
+            self.action = action
+        }
 
         /// Every word typed has to appear somewhere in the title or keywords.
         func matches(_ query: String) -> Bool {
