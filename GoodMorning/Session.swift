@@ -5,9 +5,10 @@ import Observation
 ///
 /// Rules:
 /// - Opening the app locks it until you write `wordGoal` words or spend `minuteGoal` minutes on the page.
-/// - Either one counts the day toward the streak. Time only accrues on the full-screen page while the app is frontmost
+/// - Either one counts the day toward the streak. Time only accrues while you're locked in, the app is frontmost
 ///   and the screen is awake, unlocked and yours.
-/// - One tap of Esc leaves the lock and pauses the timer. Locking in again resumes it.
+/// - ⌘L locks and unlocks, and the timer with it, leaving the window its size. ⌃⌘F fills the screen or stops.
+///   One tap of Esc does both: unlocks, leaves full screen and pauses the timer.
 /// - Once the goal is met the lock relaxes on its own. You can keep writing as long as you like.
 /// - Writing is never dropped: a page that won't save stays in memory, and is copied aside before anything replaces it.
 ///   A page that won't open is left as it is, and isn't shown or locked until it opens.
@@ -19,8 +20,9 @@ final class Session {
     private(set) var text = ""
     private(set) var wordCount = 0
     private(set) var elapsed = 0           // seconds today, up to the last check (see elapsedNow)
+    private(set) var isLockedIn = false    // ⌘L is on: the timer may run (and until the goal, the lock is on)
     private(set) var isLocked = false      // Dock, menu bar and Cmd-Tab are off
-    private(set) var isFullScreen = false  // window covers the screen (locked, or done but not yet left)
+    private(set) var isFullScreen = false  // window covers the screen
     private(set) var isComplete = false    // today counts toward the streak
     private(set) var isShowingCommands = false  // the Cmd-P palette is up
     private(set) var isShowingHelp = false      // the "How Good Morning works" card is up
@@ -34,6 +36,7 @@ final class Session {
     private(set) var celebrations = 0      // goes up each time a goal is reached, for its little animation
     private(set) var isShowingLockReminder = false  // you typed outside the lock: a banner offers to lock in
     private(set) var pastPage: PastPage?   // an earlier day's page, opened from the calendar to read, in place of today's
+    private(set) var extraSeconds = 0      // added to today's time goal with "One more minute"
 
     /// An earlier day's page, read-only. Today's stays as it is underneath, still saved, and comes back on Esc.
     struct PastPage: Equatable {
@@ -47,7 +50,7 @@ final class Session {
     var errorMessage: String? { loadError ?? saveError ?? logNotice }
 
     var wordGoal: Int { Prefs.wordGoal }
-    var secondsGoal: Int { Prefs.minuteGoal * 60 }
+    var secondsGoal: Int { Prefs.minuteGoal * 60 + extraSeconds }
     var secondsLeft: Int { max(0, secondsGoal - elapsedNow) }
     var isTimerRunning: Bool { runningSince != nil }
     var isShowingCard: Bool { isShowingCommands || isShowingHelp || isShowingCalendar }  // typing doesn't reach the page
@@ -81,7 +84,7 @@ final class Session {
     @ObservationIgnored private var onDisk: String?  // today's file as last read or written here (nil: no file)
     @ObservationIgnored private var saveFailure = ""  // why the page last failed to save, for the alerts
     @ObservationIgnored private var pageProblem: String?  // the last page write's failure, kept until one works
-    private var runningSince: SuspendingClock.Instant?  // the timer is running: page full screen, app frontmost, nobody away
+    private var runningSince: SuspendingClock.Instant?  // the timer is running: locked in, app frontmost, nobody away
     @ObservationIgnored private var awayReasons: Set<Notification.Name> = []  // screen asleep or locked, or another user's session up
     @ObservationIgnored private var awayObservers: [NSObjectProtocol] = []
     @ObservationIgnored private var ticker: Task<Void, Never>?
@@ -101,6 +104,7 @@ final class Session {
     }
 
     private static let noticesKey = "pendingNotices"
+    private static let extraTimeKey = "extraTime"  // [day key: seconds], only ever today's
 
     init() {
         folderURL = store.folder
@@ -243,6 +247,7 @@ final class Session {
         let record = store.record(for: day)
         runningSince = nil
         elapsed = record.seconds
+        extraSeconds = (UserDefaults.standard.dictionary(forKey: Self.extraTimeKey)?[day.key] as? Int) ?? 0
         isComplete = record.completed || wordCount >= wordGoal || elapsed >= secondsGoal
         if isComplete && !record.completed { markComplete() }
         streak = store.streak(endingOn: day, wordGoal: wordGoal)
@@ -252,7 +257,7 @@ final class Session {
         if loadError != nil || isComplete && elapsed >= secondsGoal {
             leaveLockdown()
         } else {
-            lockIn()
+            lockIn(fillingScreen: true)
         }
         // Already locked (a new folder chosen from the palette, say): the timer starts again on the new page.
         updateClock()
@@ -275,7 +280,7 @@ final class Session {
         checkGoal()
         // The first time you type outside the lock, a banner says the timer isn't running and offers to lock in.
         // Once per stretch outside the lock. It never takes the keyboard, so writing carries on.
-        if !hasWarnedUnlocked, !isFullScreen, pendingLock == nil, !isComplete {
+        if !hasWarnedUnlocked, !isLockedIn, pendingLock == nil, !isComplete {
             hasWarnedUnlocked = true
             isShowingLockReminder = true
         }
@@ -404,12 +409,12 @@ final class Session {
         return true
     }
 
-    /// One waiting notice, from the regular check. Never over the full-screen page while you write (it waits for the
-    /// goal or Esc), never while a lock is on its way (that would take the screen straight back from Finder), and
+    /// One waiting notice, from the regular check. Never while you're locked in or the page is full screen (it waits
+    /// for Esc or ⌘L), never while a lock is on its way (that would take the screen straight back from Finder), and
     /// never in the middle of changing pages or quitting. A sheet rather than a modal alert, so autosave and the
     /// timer carry on underneath, with OK as the default so Return just closes it.
     private func showNotice() {
-        guard !notices.isEmpty, NSApp.isActive, !isFullScreen, pendingLock == nil, !isTurningPage,
+        guard !notices.isEmpty, NSApp.isActive, !isLockedIn, !isFullScreen, pendingLock == nil, !isTurningPage,
               let window, window.attachedSheet == nil else { return }
         let notice = notices.removeFirst()
         let alert = NSAlert()
@@ -486,11 +491,11 @@ final class Session {
         runningSince = since + .seconds(seconds)
     }
 
-    /// The timer runs only while today's page is full screen, the app is frontmost, and the screen is awake,
-    /// unlocked and yours. Esc pauses it, and so does reading an earlier day's page.
+    /// The timer runs only while you're locked in on today's page, the app is frontmost, and the screen is awake,
+    /// unlocked and yours. Esc or ⌘L pauses it, and so does reading an earlier day's page.
     private func updateClock(isActive: Bool? = nil) {
         bankTime()
-        if isFullScreen, pastPage == nil, isActive ?? NSApp.isActive, awayReasons.isEmpty {
+        if isLockedIn, pastPage == nil, isActive ?? NSApp.isActive, awayReasons.isEmpty {
             if runningSince == nil { runningSince = .now }
         } else {
             runningSince = nil
@@ -542,9 +547,18 @@ final class Session {
         isShowingLockReminder = false
         NSSound(named: "Glass")?.play()
         if isLocked {
-            lockdown.relax()
+            lockdown.unlock()
             isLocked = false
         }
+    }
+
+    /// ⌘T: a minute more on today's clock. Past the time goal, the countdown starts again from a minute.
+    /// Only today's goal changes; tomorrow's is the usual one.
+    func addMinute() {
+        guard folderURL != nil, loadError == nil else { return }
+        bankTime()
+        extraSeconds = max(secondsGoal, elapsedNow) + 60 - Prefs.minuteGoal * 60
+        UserDefaults.standard.set([day.key: extraSeconds], forKey: Self.extraTimeKey)
     }
 
     private func markComplete() {
@@ -570,11 +584,11 @@ final class Session {
 
     // MARK: Lockdown
 
-    /// Lock (again). Once today's goal is met it brings back the full-screen page, and the clock with it, but not
-    /// the lock: the Dock, menu bar and Cmd-Tab stay. Does nothing while the page couldn't be read,
-    /// or if the page is already full screen or on its way.
-    func lockIn() {
-        guard folderURL != nil, loadError == nil, !isFullScreen, pendingLock == nil else { return }
+    /// ⌘L, or opening the page: lock in. The Dock, menu bar and Cmd-Tab go and the timer runs. Once today's goal is
+    /// met, only the timer: the Dock, menu bar and Cmd-Tab stay. The window keeps its size unless `fillingScreen`.
+    /// Does nothing while the page couldn't be read, or if you're already locked in or a lock is on its way.
+    func lockIn(fillingScreen: Bool = false) {
+        guard folderURL != nil, loadError == nil, !isLockedIn, pendingLock == nil else { return }
         // A short delay lets SwiftUI finish placing the window at launch before we resize it.
         pendingLock = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(250))
@@ -582,37 +596,60 @@ final class Session {
             guard !Task.isCancelled, let self else { return }
             self.pendingLock = nil
             guard let window = self.window else { return }
-            self.lockdown.engage(window)
-            if self.isComplete {
-                self.lockdown.relax()
-            } else {
+            if fillingScreen {
+                self.lockdown.enterFullScreen(window)
+                self.isFullScreen = true
+            }
+            if !self.isComplete {
+                self.lockdown.lock(window)
                 self.isLocked = true
             }
-            self.isFullScreen = true
+            NSApp.activate()
+            window.makeKeyAndOrderFront(nil)
+            self.isLockedIn = true
             self.hasWarnedUnlocked = false
             self.isShowingLockReminder = false
             self.updateClock()
         }
     }
 
-    /// Also calls off a lock that's on its way.
-    func leaveLockdown() {
+    /// Unlock and pause the timer, leaving the window as it is. Also calls off a lock that's on its way.
+    func unlock() {
         pendingLock?.cancel()
         pendingLock = nil
-        guard let window else { return }
-        lockdown.release(window)
+        if isLocked { lockdown.unlock() }
         isLocked = false
-        isFullScreen = false
+        isLockedIn = false
         updateClock()
+    }
+
+    /// Esc: unlock and leave full screen.
+    func leaveLockdown() {
+        unlock()
+        guard let window else { return }
+        lockdown.leaveFullScreen(window)
+        isFullScreen = false
         window.makeKeyAndOrderFront(nil)
     }
 
-    /// ⌘L: lock in, or step out of the full-screen page (or call off a lock on its way), like Esc.
+    /// ⌘L: lock in, or unlock (or call off a lock on its way). The window keeps its size either way.
     func toggleLock() {
-        if isFullScreen || pendingLock != nil {
-            leaveLockdown()
+        if isLockedIn || pendingLock != nil {
+            unlock()
         } else {
             lockIn()
+        }
+    }
+
+    /// ⌃⌘F: fill the screen with the page, or go back to a window. Locked or not, and the timer carries on as it was.
+    func toggleFullScreen() {
+        guard let window, folderURL != nil else { return }
+        if isFullScreen {
+            lockdown.leaveFullScreen(window)
+            isFullScreen = false
+        } else {
+            lockdown.enterFullScreen(window)
+            isFullScreen = true
         }
     }
 
@@ -682,8 +719,7 @@ final class Session {
     }
 
     /// One tap of Esc closes the command palette, help or the calendar if one is up, or an earlier day's page for
-    /// today's, or else leaves the full-screen page,
-    /// locked or not, or calls off a lock that's on its way. Elsewhere Esc is swallowed, so the text view doesn't
+    /// today's, or else unlocks and leaves full screen, or calls off a lock that's on its way. Elsewhere Esc is swallowed, so the text view doesn't
     /// pop up its word-completion list.
     ///
     /// Also ⌘=, the unshifted ⌘+, which makes the text bigger like the Bigger Text menu item.
@@ -716,7 +752,7 @@ final class Session {
             hideCalendar()
         } else if pastPage != nil {
             closePastPage()
-        } else if isFullScreen || pendingLock != nil {
+        } else if isLockedIn || isFullScreen || pendingLock != nil {
             leaveLockdown()
         } else if isShowingLockReminder {
             hideLockReminder()

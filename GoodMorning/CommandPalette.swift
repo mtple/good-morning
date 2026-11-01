@@ -68,17 +68,25 @@ struct CommandPalette: View {
 
     private var commands: [Command] {
         var commands: [Command] = []
-        if session.isFullScreen {
-            commands.append(Command(id: "lock", title: "Leave Full Screen", keywords: "exit escape unlock lock out pause", shortcut: "⌘L") {
-                session.leaveLockdown()
+        if session.isLockedIn {
+            commands.append(Command(id: "lock", title: session.isLocked ? "Unlock" : "Pause Timer",
+                                    keywords: "unlock lock out pause stop timer", shortcut: "⌘L") {
+                session.unlock()
             })
         } else if session.folderURL != nil {
-            commands.append(Command(id: "lock", title: session.isComplete ? "Full Screen" : "Lock In",
-                                    keywords: "full screen lock in focus resume start timer", shortcut: "⌘L") {
+            commands.append(Command(id: "lock", title: session.isComplete ? "Start Timer" : "Lock In",
+                                    keywords: "lock in focus resume start timer", shortcut: "⌘L") {
                 session.lockIn()
             })
         }
         if session.folderURL != nil {
+            commands.append(Command(id: "fullScreen", title: session.isFullScreen ? "Leave Full Screen" : "Full Screen",
+                                    keywords: "fill screen window exit size", shortcut: "⌃⌘F") {
+                session.toggleFullScreen()
+            })
+            commands.append(Command(title: "One More Minute", keywords: "add time extend timer clock plus", shortcut: "⌘T") {
+                session.addMinute()
+            })
             commands.append(Command(title: "Calendar", keywords: "history streak past days month stats", shortcut: "⌘Y") {
                 session.toggleCalendar()
             })
@@ -105,6 +113,16 @@ struct CommandPalette: View {
                                 shortcut: "⇧⌘T", isChecked: Prefs.typingSound) {
             Prefs.setTypingSound(!Prefs.typingSound)
         })
+        let parts = [("Word Bands", "left margin sidebar words colour", Prefs.showsWordBandsKey, Prefs.showsWordBands),
+                     ("Sand Timer", "right margin sidebar hourglass time grains", Prefs.showsSandKey, Prefs.showsSand),
+                     ("Clock", "timer time countdown status bar", Prefs.showsClockKey, Prefs.showsClock),
+                     ("Word Count", "words status bar", Prefs.showsWordCountKey, Prefs.showsWordCount)]
+        for (index, part) in parts.enumerated() {
+            commands.append(Command(title: "Show \(part.0)", keywords: "layout hide \(part.1)",
+                                    shortcut: "⌥⌘\(index + 1)", isChecked: part.3) {
+                Prefs.toggle(part.2)
+            })
+        }
         let current = Prefs.appearance
         for (index, appearance) in Appearance.allCases.enumerated() {
             commands.append(Command(title: "Appearance: \(appearance.title)", keywords: "mode theme color night day",
@@ -116,7 +134,7 @@ struct CommandPalette: View {
                                 keywords: "pages save location obsidian vault open", shortcut: "⌘O") {
             session.chooseFolder()
         })
-        commands.append(Command(title: "Settings…", keywords: "preferences goal words minutes login font size line width", shortcut: "⌘,") {
+        commands.append(Command(title: "Settings…", keywords: "preferences goal words minutes login font size line width layout", shortcut: "⌘,") {
             openSettings()
         })
         commands.append(Command(title: "Help: How Good Morning Works", keywords: "info about guide lost what why ?", shortcut: "⌘?") {

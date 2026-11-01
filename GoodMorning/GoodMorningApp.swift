@@ -14,6 +14,10 @@ struct GoodMorningApp: App {
             CommandGroup(replacing: .newItem) {
                 Button("Lock In or Out") { appDelegate.session.toggleLock() }
                     .keyboardShortcut("l")
+                Button("Full Screen") { appDelegate.session.toggleFullScreen() }
+                    .keyboardShortcut("f", modifiers: [.command, .control])
+                Button("One More Minute") { appDelegate.session.addMinute() }
+                    .keyboardShortcut("t")
                 Button("Commands…") { appDelegate.session.toggleCommands() }
                     .keyboardShortcut("p")
                 Button("Calendar") { appDelegate.session.toggleCalendar() }
@@ -45,6 +49,11 @@ struct GoodMorningApp: App {
                 Button("Typewriter Sound") { Prefs.setTypingSound(!Prefs.typingSound) }
                     .keyboardShortcut("t", modifiers: [.command, .shift])
                 Divider()
+                ForEach(Array(Self.parts.enumerated()), id: \.offset) { index, part in
+                    Button("Show \(part.title)") { Prefs.toggle(part.key) }
+                        .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: [.command, .option])
+                }
+                Divider()
                 ForEach(Array(Appearance.allCases.enumerated()), id: \.element) { index, appearance in
                     Button("Appearance: \(appearance.title)") { appearance.choose() }
                         .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: .command)
@@ -60,6 +69,12 @@ struct GoodMorningApp: App {
             SettingsView(session: appDelegate.session)
         }
     }
+
+    /// What can be hidden from the page, on ⌥⌘1–4.
+    private static let parts: [(title: String, key: String)] = [
+        ("Word Bands", Prefs.showsWordBandsKey), ("Sand Timer", Prefs.showsSandKey),
+        ("Clock", Prefs.showsClockKey), ("Word Count", Prefs.showsWordCountKey),
+    ]
 }
 
 @MainActor
@@ -69,6 +84,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // Before the window appears, so it doesn't open in the wrong colors.
     func applicationWillFinishLaunching(_ notification: Notification) {
         Prefs.appearance.apply()
+        // AppKit's own Enter Full Screen item would sit on ⌃⌘F too. The page does its own full screen.
+        UserDefaults.standard.register(defaults: ["NSFullScreenMenuItemEverywhere": false])
     }
 
     // One window, one job: closing it quits the app (and saves).

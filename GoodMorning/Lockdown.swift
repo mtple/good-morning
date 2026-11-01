@@ -1,9 +1,13 @@
 import AppKit
 
-/// The soft lock. While engaged, the window fills the screen, the Dock and menu bar are hidden,
-/// and Cmd-Tab and Cmd-H do nothing. Force Quit, Mission Control and Spotlight still work,
-/// and quitting or crashing gives everything back, because these options only apply while
-/// this app is frontmost.
+/// The soft lock, and the full-screen page, which come and go separately.
+///
+/// While locked, the Dock and menu bar are hidden, Cmd-Tab and Cmd-H do nothing, and switching to another app
+/// or Space (with Mission Control, a swipe or Ctrl-arrow) brings the page straight back. Force Quit and Spotlight
+/// still work, and quitting or crashing gives everything back, because these options only apply while this app
+/// is frontmost.
+///
+/// Full screen fills the screen with the page, locked or not.
 ///
 /// AppKit raises an exception for invalid option combinations, so only these two sets are used.
 /// (Hiding the menu bar requires hiding the Dock; disabling process switching requires hiding
@@ -15,18 +19,45 @@ final class Lockdown {
     private static let relaxed: NSApplication.PresentationOptions =
         [.autoHideDock, .autoHideMenuBar]
 
+    /// Apps that may come forward while locked: Force Quit and the login window, Spotlight, password prompts,
+    /// and the open panel, which runs in a process of its own.
+    private static let allowedApps = ["com.apple.loginwindow", "com.apple.Spotlight", "com.apple.SecurityAgent"]
+    private static let allowedPrefixes = ["com.apple.appkit.xpc."]
+
+    private(set) var isLocked = false
     private(set) var isFullScreen = false
+    private weak var window: NSWindow?
     private var savedFrame: NSRect?
     private var savedStyle: NSWindow.StyleMask = []
     private var backdrop: NSWindow?
+    private var watchers: [NSObjectProtocol] = []
 
-    /// Fill the screen and lock.
-    func engage(_ window: NSWindow) {
+    /// The Dock, menu bar and Cmd-Tab go, and the page stays in front. The window keeps its size.
+    func lock(_ window: NSWindow) {
+        self.window = window
+        isLocked = true
         NSApp.activate()
+        applyOptions()
+        // Brought back on whichever Space you went to, rather than taking you back to its own.
+        window.collectionBehavior.insert(.moveToActiveSpace)
+        watchForLeaving()
+    }
+
+    /// Goal met, Esc, or ⌘L: the Dock, menu bar and Cmd-Tab come back. The window keeps its size.
+    func unlock() {
+        isLocked = false
+        applyOptions()
+        window?.collectionBehavior.remove(.moveToActiveSpace)
+        let center = NSWorkspace.shared.notificationCenter
+        watchers.forEach(center.removeObserver)
+        watchers.removeAll()
+    }
+
+    /// Fill the screen with the page.
+    func enterFullScreen(_ window: NSWindow) {
+        guard !isFullScreen else { return }
         // Hide the menu bar first, so the window is allowed to cover the top of the screen.
         NSApp.presentationOptions = Self.strict
-        guard !isFullScreen else { return }
-
         savedFrame = window.frame
         savedStyle = window.styleMask
         window.styleMask.remove([.resizable, .miniaturizable, .closable])
@@ -38,28 +69,56 @@ final class Lockdown {
         }
         window.makeKeyAndOrderFront(nil)
         isFullScreen = true
+        applyOptions()
     }
 
-    /// Goal met: keep the full-screen page, but give back the Dock, the menu bar and Cmd-Tab.
-    func relax() {
-        guard isFullScreen else { return }
-        NSApp.presentationOptions = Self.relaxed
-    }
-
-    /// Back to an ordinary window. Also one that opened screen-sized without the lock (the window keeps its last
-    /// frame, so it does after a quit while locked), which would otherwise look full screen with no way out.
-    func release(_ window: NSWindow) {
-        NSApp.presentationOptions = []
+    /// Back to an ordinary window. Also one that opened screen-sized without full screen (the window keeps its last
+    /// frame, so it does after a quit while full screen), which would otherwise look full screen with no way out.
+    func leaveFullScreen(_ window: NSWindow) {
         if isFullScreen {
+            isFullScreen = false
+            applyOptions()
             window.styleMask = savedStyle
             window.isMovable = true
             setTrafficLightsHidden(false, in: window)
             hideBackdrop(from: window)
             window.setFrame(restoredFrame(for: window), display: true, animate: true)
-            isFullScreen = false
         } else if isScreenSized(window.frame, for: window) {
             window.setFrame(restoredFrame(for: window), display: true, animate: true)
         }
+    }
+
+    /// Locked: everything off. Full screen but unlocked: the Dock and menu bar slide in when you reach for them.
+    private func applyOptions() {
+        NSApp.presentationOptions = isLocked ? Self.strict : isFullScreen ? Self.relaxed : []
+    }
+
+    /// Presentation options can't stop Mission Control or a swipe to another Space, so while locked, another app
+    /// coming forward, or a change of Space, brings the page back.
+    private func watchForLeaving() {
+        guard watchers.isEmpty else { return }
+        let center = NSWorkspace.shared.notificationCenter
+        watchers.append(center.addObserver(forName: NSWorkspace.didActivateApplicationNotification, object: nil,
+                                           queue: .main) { [weak self] note in
+            let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
+            let id = app?.bundleIdentifier ?? ""
+            MainActor.assumeIsolated {
+                guard app != .current, !Self.allowedApps.contains(id),
+                      !Self.allowedPrefixes.contains(where: id.hasPrefix) else { return }
+                self?.comeBack()
+            }
+        })
+        watchers.append(center.addObserver(forName: NSWorkspace.activeSpaceDidChangeNotification, object: nil,
+                                           queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.comeBack() }
+        })
+    }
+
+    private func comeBack() {
+        guard isLocked, let window else { return }
+        // A polite activate() can be turned down while another app is in front, and this one has to win.
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil)
     }
 
     /// The whole screen, less the strip beside the camera notch on MacBooks that have one. AppKit won't
@@ -95,8 +154,8 @@ final class Lockdown {
         }
     }
 
-    /// The frame from before the lock, unless that was already screen-sized
-    /// (say, the app last quit while locked). Then a comfortable centered window.
+    /// The frame from before full screen, unless that was already screen-sized
+    /// (say, the app last quit while full screen). Then a comfortable centered window.
     private func restoredFrame(for window: NSWindow) -> NSRect {
         let visible = visibleFrame(for: window)
         if let saved = savedFrame, !isScreenSized(saved, for: window) {

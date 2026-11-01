@@ -109,6 +109,10 @@ struct ContentView: View {
 private struct StatusBar: View {
     let session: Session
 
+    @Environment(\.openSettings) private var openSettings
+    @AppStorage(Prefs.showsClockKey) private var showsClock = true
+    @AppStorage(Prefs.showsWordCountKey) private var showsWordCount = true
+
     var body: some View {
         // The word count stays centered, whatever the two sides hold, and never runs into them.
         StatusBarLayout(gap: 16) {
@@ -128,18 +132,25 @@ private struct StatusBar: View {
             if session.isComplete {
                 Text("Done for today")
             }
-            if session.isTimerRunning {
-                // Checks run every 5 seconds; the clock on screen still ticks each second.
-                TimelineView(.periodic(from: .now, by: 1)) { _ in Text(clockText) }
-            } else {
-                Text(clockText)
+            if showsClock {
+                // The goals and what's shown are in Settings.
+                Button { openSettings() } label: {
+                    if session.isTimerRunning {
+                        // Checks run every 5 seconds; the clock on screen still ticks each second.
+                        TimelineView(.periodic(from: .now, by: 1)) { _ in Text(clockText) }
+                    } else {
+                        Text(clockText)
+                    }
+                }
+                .buttonStyle(.plain)
+                .help("Settings (⌘,)")
             }
-            if !session.isFullScreen, session.loadError == nil {  // no locking in to a page that isn't there
-                Button(session.isComplete ? "Full screen" : "Lock in") { session.lockIn() }
+            if !session.isLockedIn, session.loadError == nil {  // no locking in to a page that isn't there
+                Button(session.isComplete ? "Start timer" : "Lock in") { session.lockIn() }
                     .buttonStyle(.link)
                     .help("Command-L")
             }
-            if session.isFullScreen {
+            if session.isLockedIn || session.isFullScreen {
                 Text("esc to leave").foregroundStyle(.tertiary)
             }
             Button("⌘P commands") { session.toggleCommands() }
@@ -155,8 +166,10 @@ private struct StatusBar: View {
             Text(error)
                 .foregroundStyle(.red)
                 .help(error)  // the bar may cut it short
-        } else {
-            Text("\(session.wordCount.formatted()) / \(session.wordGoal.formatted()) words")
+        } else if showsWordCount {
+            Button("\(session.wordCount.formatted()) / \(session.wordGoal.formatted()) words") { openSettings() }
+                .buttonStyle(.plain)
+                .help("Settings (⌘,)")
                 // A small lift when a goal is reached.
                 .phaseAnimator([false, true], trigger: session.celebrations) { content, lifted in
                     content
@@ -171,21 +184,16 @@ private struct StatusBar: View {
     private var right: some View {
         HStack(spacing: 10) {
             SaveIndicator(saves: session.pageSaves)
-            Button(streakText) { session.toggleCalendar() }
-                .buttonStyle(.plain)
-                .help("Calendar (⌘Y)")
+            Button { session.toggleCalendar() } label: {
+                Image(systemName: "calendar")
+            }
+            .buttonStyle(.plain)
+            .help("Calendar (⌘Y)")
             Button { session.toggleHelp() } label: {
                 Image(systemName: "questionmark.circle")
             }
             .buttonStyle(.plain)
             .help("How Good Morning works (⌘?)")
-        }
-    }
-
-    private var streakText: String {
-        switch session.streak {
-        case 0: "No streak yet"
-        default: "\(session.streak)-day streak"
         }
     }
 
@@ -376,6 +384,8 @@ private struct Margins: View {
     let column: CGFloat  // the width of the text column, centered between the margins
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @AppStorage(Prefs.showsWordBandsKey) private var showsWordBands = true
+    @AppStorage(Prefs.showsSandKey) private var showsSand = true
 
     private static let textInset: CGFloat = 37  // the editor's 32 pt inset plus 5 pt line padding, as in the status bar
 
@@ -388,30 +398,34 @@ private struct Margins: View {
                 let height = min(geo.size.height * 0.5, 420)
                 let y = geo.size.height / 2
 
-                WordBands(progress: Double(session.wordCount) / Double(max(1, session.wordGoal)))
-                    .frame(width: 56, height: height)
-                    .help("\(session.wordCount.formatted()) of \(session.wordGoal.formatted()) words")
-                    .accessibilityElement()
-                    .accessibilityLabel("Words")
-                    .accessibilityValue("\(session.wordCount) of \(session.wordGoal)")
-                    .position(x: middle, y: y)
-
-                Group {
-                    if session.isTimerRunning, !reduceMotion {
-                        // Smooth enough for a falling grain. A few dozen dots cost next to nothing to redraw.
-                        TimelineView(.animation(minimumInterval: 1.0 / 30)) { _ in grains }
-                    } else if session.isTimerRunning {
-                        TimelineView(.periodic(from: .now, by: 1)) { _ in grains }
-                    } else {
-                        grains
-                    }
+                if showsWordBands {
+                    WordBands(progress: Double(session.wordCount) / Double(max(1, session.wordGoal)))
+                        .frame(width: 56, height: height)
+                        .help("\(session.wordCount.formatted()) of \(session.wordGoal.formatted()) words")
+                        .accessibilityElement()
+                        .accessibilityLabel("Words")
+                        .accessibilityValue("\(session.wordCount) of \(session.wordGoal)")
+                        .position(x: middle, y: y)
                 }
-                .frame(width: SandColumn.width, height: height)
-                .help(minutesText)
-                .accessibilityElement()
-                .accessibilityLabel("Time")
-                .accessibilityValue(minutesText)
-                .position(x: geo.size.width - middle, y: y)
+
+                if showsSand {
+                    Group {
+                        if session.isTimerRunning, !reduceMotion {
+                            // Smooth enough for a falling grain. A few dozen dots cost next to nothing to redraw.
+                            TimelineView(.animation(minimumInterval: 1.0 / 30)) { _ in grains }
+                        } else if session.isTimerRunning {
+                            TimelineView(.periodic(from: .now, by: 1)) { _ in grains }
+                        } else {
+                            grains
+                        }
+                    }
+                    .frame(width: SandColumn.width, height: height)
+                    .help(minutesText)
+                    .accessibilityElement()
+                    .accessibilityLabel("Time")
+                    .accessibilityValue(minutesText)
+                    .position(x: geo.size.width - middle, y: y)
+                }
             }
         }
         .ignoresSafeArea()
@@ -425,7 +439,7 @@ private struct Margins: View {
     }
 
     private var minutesText: String {
-        "\(session.elapsedNow / 60) of \(Prefs.minuteGoal) minutes"
+        "\(session.elapsedNow / 60) of \(session.secondsGoal / 60) minutes"
     }
 }
 
@@ -787,10 +801,12 @@ private struct HelpCard: View {
             VStack(alignment: .leading, spacing: 8) {
                 point("Write until you reach \(session.wordGoal.formatted()) words or spend \(Prefs.minuteGoal) minutes on the page, whichever comes first.")
                 point("Bands of warm colour build up in the left margin as you write. On the right, a bar slides aside to let a grain of sand drop through as the minutes pass, until the top is empty and the bottom is full.")
-                point("While you write, the page fills the screen and the Dock, menu bar and Cmd-Tab are switched off.")
-                point("Esc steps out and pauses the timer. ⌘L locks you back in, or steps out. The timer only runs while the page is full screen and Good Morning is in front. Done on words with time left, the page opens full screen (unlocked) so the timer runs down to 0.")
+                point("While you're locked in, the Dock, menu bar and Cmd-Tab are switched off, and switching Spaces brings the page back. The page opens full screen and locked in.")
+                point("⌘L locks and unlocks, and starts and pauses the timer, without changing the window's size. ⌃⌘F fills the screen or goes back to a window. Esc does both: it unlocks, leaves full screen and pauses the timer. The timer only runs while you're locked in and Good Morning is in front.")
+                point("⌘T adds a minute to today's clock. Past the time goal, it counts down another minute.")
                 point("Reaching a goal plays a chime, counts the day toward your streak, and gives back the Dock and Cmd-Tab.")
-                point("Click your streak, or press ⌘Y, for a calendar of the days you've written. Click a day to read its page.")
+                point("Click the calendar, or press ⌘Y, for the days you've written. Click a day to read its page.")
+                point("Click the clock or word count for Settings, where you can set your goals and hide the margins, clock or word count.")
                 point("Your page saves itself every few seconds as a plain markdown file, one per day, in \(folder).")
                 point("⌘+ and ⌘− change the text size, ⌘[ and ⌘] the page width. ⌘1, 2 and 3 pick system, light or dark, and ⇧⌘T turns the typewriter sound on or off. ⌘P shows every command with its shortcut. ⌘, opens Settings.")
             }

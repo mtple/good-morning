@@ -41,6 +41,9 @@ struct EditorView: NSViewRepresentable {
         textView.isAutomaticQuoteSubstitutionEnabled = false
         textView.isAutomaticDashSubstitutionEnabled = false
         textView.isAutomaticTextReplacementEnabled = false
+        // Grey suggested words ahead of the caret. One long enough to wrap pushes the lines below down and back.
+        textView.inlinePredictionType = .no
+        if #available(macOS 15.0, *) { textView.mathExpressionCompletionType = .no }
         textView.updateMargins()
         textView.textColor = .textColor
         textView.insertionPointColor = .textColor

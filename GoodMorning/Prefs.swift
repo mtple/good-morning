@@ -9,6 +9,10 @@ enum Prefs {
     static let lineWidthKey = "lineWidth"
     static let typingSoundKey = "typingSound"
     static let recentCommandsKey = "recentCommands"
+    static let showsWordBandsKey = "showsWordBands"
+    static let showsSandKey = "showsSand"
+    static let showsClockKey = "showsClock"
+    static let showsWordCountKey = "showsWordCount"
 
     static let defaultWordGoal = 750
     static let defaultMinuteGoal = 30
@@ -25,6 +29,16 @@ enum Prefs {
     static var lineWidth: Double { clamped(lineWidthKey, to: lineWidths, or: defaultLineWidth) }
     static var typingSound: Bool { UserDefaults.standard.bool(forKey: typingSoundKey) }  // off unless turned on
     static var recentCommands: [String] { UserDefaults.standard.stringArray(forKey: recentCommandsKey) ?? [] }
+
+    /// What's on the page besides the text, each on unless turned off.
+    static var showsWordBands: Bool { shows(showsWordBandsKey) }
+    static var showsSand: Bool { shows(showsSandKey) }
+    static var showsClock: Bool { shows(showsClockKey) }
+    static var showsWordCount: Bool { shows(showsWordCountKey) }
+
+    static func toggle(_ key: String) {
+        UserDefaults.standard.set(!shows(key), forKey: key)
+    }
 
     /// ⌘+ and ⌘−.
     static func changeFontSize(by step: Double) {
@@ -54,6 +68,10 @@ enum Prefs {
 
     static var appearance: Appearance {
         UserDefaults.standard.string(forKey: appearanceKey).flatMap(Appearance.init) ?? .system
+    }
+
+    private static func shows(_ key: String) -> Bool {
+        UserDefaults.standard.object(forKey: key) as? Bool ?? true
     }
 
     private static func positive(_ key: String, or fallback: Int) -> Int {

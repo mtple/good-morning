@@ -10,6 +10,10 @@ struct SettingsView: View {
     @AppStorage(Prefs.fontSizeKey) private var fontSize = Prefs.defaultFontSize
     @AppStorage(Prefs.lineWidthKey) private var lineWidth = Prefs.defaultLineWidth
     @AppStorage(Prefs.typingSoundKey) private var typingSound = false
+    @AppStorage(Prefs.showsWordBandsKey) private var showsWordBands = true
+    @AppStorage(Prefs.showsSandKey) private var showsSand = true
+    @AppStorage(Prefs.showsClockKey) private var showsClock = true
+    @AppStorage(Prefs.showsWordCountKey) private var showsWordCount = true
     @State private var openAtLogin = SMAppService.mainApp.status == .enabled
     @State private var loginStatus = SMAppService.mainApp.status
     @State private var loginError: String?  // why the last change to "Open at login" didn't take
@@ -38,6 +42,13 @@ struct SettingsView: View {
                 }
                 Toggle("Typewriter sound", isOn: $typingSound)
                     .onChange(of: typingSound) { _, isOn in if isOn { Typewriter.shared.play(.key) } }
+            }
+
+            Section("On the page") {
+                Toggle("Word bands in the left margin", isOn: $showsWordBands)
+                Toggle("Sand timer in the right margin", isOn: $showsSand)
+                Toggle("Clock", isOn: $showsClock)
+                Toggle("Word count", isOn: $showsWordCount)
             }
 
             Section("Pages") {
