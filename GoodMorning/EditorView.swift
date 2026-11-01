@@ -166,6 +166,12 @@ final class PageTextView: NSTextView {
         super.drawInsertionPoint(in: caret, color: color, turnedOn: flag)
     }
 
+    /// The caret above is wider than the rect AppKit gives it, and AppKit only clears its own rect when the caret
+    /// blinks off or moves, so clear a little either side too, or a sliver of the old caret stays behind.
+    override func setNeedsDisplay(_ rect: NSRect, avoidAdditionalLayout flag: Bool) {
+        super.setNeedsDisplay(rect.insetBy(dx: -1, dy: 0), avoidAdditionalLayout: flag)
+    }
+
     override func keyDown(with event: NSEvent) {
         if isEditable, let stroke = Typewriter.stroke(for: event) { Typewriter.shared.play(stroke) }
         super.keyDown(with: event)
